@@ -1,0 +1,46 @@
+# =============================================================================
+# PMO Project Initiation Portal — Docker Compose
+# =============================================================================
+# Usage:
+#   docker compose up -d          # start
+#   docker compose logs -f         # view logs
+#   docker compose down            # stop
+# =============================================================================
+
+version: '3.8'
+
+services:
+  portal:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pmo-portal
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - TENANT_ID=${TENANT_ID}
+      - CLIENT_ID=${CLIENT_ID}
+      - CLIENT_SECRET=${CLIENT_SECRET}
+      - SHAREPOINT_SITE_URL=${SHAREPOINT_SITE_URL:-https://techdefencelabsolutions.sharepoint.com/sites/pmo}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
+      - RATE_LIMIT_WINDOW_MS=${RATE_LIMIT_WINDOW_MS:-60000}
+      - RATE_LIMIT_MAX=${RATE_LIMIT_MAX:-100}
+      - RATE_LIMIT_INITIATE_WINDOW_MS=${RATE_LIMIT_INITIATE_WINDOW_MS:-60000}
+      - RATE_LIMIT_INITIATE_MAX=${RATE_LIMIT_INITIATE_MAX:-10}
+      - HEALTH_CHECK_TIMEOUT_MS=${HEALTH_CHECK_TIMEOUT_MS:-5000}
+    env_file:
+      - .production.env
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); })"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -1,0 +1,1066 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; font-src 'self' data:; object-src 'none'; frame-ancestors 'self';" />
+<title>Cybersecurity PMO — Project Initiation</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+.csif-app, .csif-app * { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; box-sizing: border-box; }
+.csif-wrapper { background: linear-gradient(135deg, #f0f4f8 0%, #d9e2ec 100%); min-height: 100vh; padding: 2rem; color: #1a202c; }
+.csif-app { max-width: 960px; margin: 0 auto; background: white; border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.08); overflow: visible; }
+.csif-app .header { background: #1e293b; color: white; padding: 1.5rem 2rem; display: flex; justify-content: space-between; align-items: center; border-top-left-radius: 16px; border-top-right-radius: 16px; }
+.csif-app .header h1 { font-size: 1.25rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; }
+.csif-app .header .meta { text-align: right; font-size: 0.8rem; color: #94a3b8; }
+.csif-app .step-indicator { display: flex; border-bottom: 1px solid #e2e8f0; background: #f8fafc; }
+.csif-app .step { flex: 1; padding: 1rem; text-align: center; font-size: 0.85rem; font-weight: 500; color: #94a3b8; border-bottom: 3px solid transparent; cursor: pointer; }
+.csif-app .step.active { color: #3b82f6; border-bottom-color: #3b82f6; background: white; }
+.csif-app .step.completed { color: #10b981; }
+.csif-app .step .num { display: inline-block; width: 22px; height: 22px; border-radius: 50%; line-height: 22px; text-align: center; font-size: 0.75rem; font-weight: 700; margin-right: 6px; }
+.csif-app .step.active .num { background: #3b82f6; color: white; }
+.csif-app .step.completed .num { background: #10b981; color: white; }
+.csif-app .step:not(.active):not(.completed) .num { background: #e2e8f0; color: #94a3b8; }
+.csif-app .form-body { padding: 2rem; }
+.csif-app .form-section { display: none; }
+.csif-app .form-section.active { display: block; }
+.csif-app h2 { font-size: 1.5rem; margin-bottom: 0.25rem; }
+.csif-app .subtitle { color: #64748b; font-size: 0.9rem; margin-bottom: 1.5rem; }
+.csif-app .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.csif-app .form-grid.full { grid-template-columns: 1fr; }
+.csif-app .form-grid.triple { grid-template-columns: 1fr 1fr 1fr; }
+.csif-app .form-group { margin-bottom: 0.25rem; }
+.csif-app .form-group label { display: block; font-size: 0.85rem; font-weight: 600; color: #374151; margin-bottom: 4px; }
+.csif-app .form-group input, .csif-app .form-group select, .csif-app .form-group textarea { width: 100%; padding: 0.6rem 0.75rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.9rem; background: white; font-family: inherit; }
+.csif-app .form-group textarea { resize: vertical; min-height: 60px; }
+.csif-app .form-group input:focus, .csif-app .form-group select:focus, .csif-app .form-group textarea:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+.csif-app .form-group input:disabled { background: #f1f5f9; color: #475569; }
+.csif-app hr { border: none; border-top: 1px solid #e2e8f0; margin: 1.5rem 0; }
+.csif-app .section-label { font-size: 1rem; font-weight: 600; margin: 1.5rem 0 0.75rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.5rem; }
+.csif-app .assessment-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem; }
+.csif-app .assessment-card { padding: 0.75rem 1rem; border: 2px solid #e2e8f0; border-radius: 10px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 0.75rem; font-size: 0.85rem; font-weight: 500; user-select: none; }
+.csif-app .assessment-card:hover { border-color: #93c5fd; }
+.csif-app .assessment-card.selected { border-color: #3b82f6; background: #eff6ff; }
+.csif-app .assessment-card input[type="checkbox"] { width: 18px; height: 18px; accent-color: #3b82f6; }
+.csif-app .assessment-card.disabled { opacity: 0.45; cursor: not-allowed; background: #f8fafc; }
+.csif-app .dept-card { border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 1.25rem; overflow: visible; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }
+.csif-app .dept-card-header { background: #1e293b; color: white; padding: 0.9rem 1.25rem; display: flex; justify-content: space-between; align-items: center; cursor: pointer; border-top-left-radius: 12px; border-top-right-radius: 12px; }
+.csif-app .dept-card-header h3 { font-size: 1.05rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; }
+.csif-app .dept-card-header .chev { transition: transform 0.2s; font-size: 0.9rem; color: #94a3b8; }
+.csif-app .dept-card.collapsed .chev { transform: rotate(-90deg); }
+.csif-app .dept-card-body { padding: 1.25rem; }
+.csif-app .dept-card.collapsed .dept-card-body { display: none; }
+.csif-app .dept-badge { font-size: 0.7rem; background: #3b82f6; color: white; padding: 0.1rem 0.5rem; border-radius: 20px; font-weight: 600; }
+.csif-app .sub-card { border: 1px solid #e2e8f0; border-left: 3px solid #3b82f6; border-radius: 10px; padding: 1rem 1.1rem; margin: 0.75rem 0; background: #fbfdff; }
+.csif-app .sub-card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+.csif-app .sub-card-head strong { font-size: 0.9rem; color: #1e293b; }
+.csif-app .sub-card .rem { cursor: pointer; color: #ef4444; font-size: 1.1rem; line-height: 1; padding: 0 0.25rem; }
+.csif-app .sub-card .rem:hover { color: #b91c1c; }
+.csif-app .hint { color: #64748b; font-size: 0.8rem; margin-top: 0.35rem; }
+.csif-app .scope-grid .scope-field .hint { margin-top: 0.25rem; }
+.csif-app .scope-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.csif-app .scope-field { min-width: 0; }
+.csif-app .scope-field.full { grid-column: 1 / -1; }
+.csif-app .scope-field label { display: flex; align-items: center; gap: 0.35rem; font-size: 0.82rem; font-weight: 700; color: #334155; margin-bottom: 0.35rem; }
+.csif-app .scope-field input, .csif-app .scope-field select, .csif-app .scope-field textarea { width: 100%; padding: 0.55rem 0.7rem; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.9rem; }
+.csif-app .scope-field textarea { min-height: 70px; resize: vertical; }
+.csif-app .scope-field .pp { position: relative; }
+.csif-app .scope-field .pp-input { width: 100%; }
+.csif-app .pp-list { position: absolute; z-index: 50; left: 0; right: 0; top: 100%; background: white; border: 1px solid #cbd5e1; border-top: none; border-radius: 0 0 8px 8px; max-height: 240px; overflow-y: auto; box-shadow: 0 10px 24px rgba(0,0,0,0.12); display: none; }
+.csif-app .pp-item { padding: 0.5rem 0.7rem; cursor: pointer; border-bottom: 1px solid #f1f5f9; }
+.csif-app .pp-item:hover { background: #eff6ff; }
+.csif-app .pp-name { font-size: 0.85rem; font-weight: 600; color: #0f172a; }
+.csif-app .pp-email { font-size: 0.75rem; color: #64748b; }
+.csif-app .pp-empty { padding: 0.6rem 0.7rem; font-size: 0.8rem; color: #94a3b8; }
+.csif-app .asset-table { width: 100%; border-collapse: collapse; margin-bottom: 0.5rem; }
+.csif-app .asset-table th { font-size: 0.78rem; font-weight: 600; color: #64748b; text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid #e2e8f0; }
+.csif-app .asset-table td { padding: 0.3rem 0.5rem; vertical-align: middle; }
+.csif-app .asset-table input { padding: 0.35rem 0.5rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.85rem; }
+.csif-app .asset-table .count { width: 90px; }
+.csif-app .asset-table .rem { width: 32px; text-align: center; color: #ef4444; cursor: pointer; font-size: 1.1rem; }
+.csif-app .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.csif-app .chip { font-size: 0.72rem; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; padding: 0.2rem 0.55rem; border-radius: 999px; }
+.csif-app .btn-add-other { background: none; border: 1px dashed #94a3b8; color: #64748b; border-radius: 6px; padding: 0.3rem 0.75rem; font-size: 0.78rem; cursor: pointer; margin-top: 0.25rem; }
+.csif-app .btn-add-other:hover { border-color: #3b82f6; color: #3b82f6; }
+.csif-app .btn-remove-other { background: none; border: none; color: #ef4444; cursor: pointer; font-size: 1rem; padding: 0 0.25rem; }
+.csif-app .empty-hint { color: #94a3b8; font-size: 0.9rem; padding: 0.5rem 0; }
+.csif-app .btn-row { display: flex; justify-content: space-between; margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #e2e8f0; }
+.csif-app .btn { padding: 0.6rem 1.5rem; border: none; border-radius: 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; }
+.csif-app .btn-primary { background: #3b82f6; color: white; }
+.csif-app .btn-primary:hover { background: #2563eb; }
+.csif-app .btn-outline { background: white; color: #374151; border: 1px solid #d1d5db; }
+.csif-app .btn-success { background: #10b981; color: white; }
+.csif-app .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.csif-app #json-output { display: none; margin-top: 1rem; background: #0f172a; color: #e2e8f0; border-radius: 10px; padding: 1.25rem; font-family: 'Consolas', monospace; font-size: 0.8rem; overflow-x: auto; white-space: pre-wrap; max-height: 500px; overflow-y: auto; }
+.csif-app #json-output.visible { display: block; }
+.csif-app .json-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-bottom: 0.75rem; }
+.csif-app .copy-btn { background: #334155; color: white; border: none; padding: 0.35rem 0.85rem; border-radius: 6px; cursor: pointer; font-size: 0.75rem; font-weight: 600; }
+.csif-app .review-summary { background: #1e293b; color: white; border-radius: 10px; padding: 1.5rem; margin-bottom: 1rem; }
+.csif-app .review-summary .row { display: flex; justify-content: space-between; padding: 0.3rem 0; font-size: 0.85rem; gap: 1rem; }
+.csif-app .review-summary .row .label { color: #94a3b8; }
+.csif-app .review-tree { font-family: 'Consolas', monospace; font-size: 0.8rem; padding: 1rem; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; line-height: 1.6; overflow-x: auto; }
+@media (max-width: 640px) { .csif-wrapper { padding: 1rem; } .csif-app .form-grid, .csif-app .scope-grid { grid-template-columns: 1fr; } .csif-app .step-indicator { display: none; } }
+</style>
+</head>
+<body>
+<div class="csif-wrapper">
+<div class="csif-app" id="app">
+  <div class="header">
+    <div>
+      <h1>Cyber PMO — Project Initiation</h1>
+      <div style="font-size:0.75rem;color:#64748b;margin-top:4px;">Metadata-driven intake (users &amp; definitions from Microsoft Graph / SharePoint)</div>
+    </div>
+    <div class="meta"><div id="createdDate">—</div></div>
+  </div>
+  <div class="step-indicator">
+    <div class="step active" data-step="1"><span class="num">1</span> Client</div>
+    <div class="step" data-step="2"><span class="num">2</span> Departments</div>
+    <div class="step" data-step="3"><span class="num">3</span> Review &amp; JSON</div>
+  </div>
+  <div class="form-body">
+    <div class="form-section active" id="step1">
+      <h2>Client Information</h2>
+      <p class="subtitle">Select the client. BD Person is auto-resolved from Client Master via Microsoft Graph.</p>
+      <div class="form-grid full">
+        <div class="form-group">
+          <label>Select Client <span class="req">*</span></label>
+          <select id="clientSelect"><option value="">— Search / Select Client —</option></select>
+          <div class="hint" id="clientLoadStatus"></div>
+        </div>
+      </div>
+      <hr />
+      <div class="form-grid">
+        <div class="form-group"><label>Client Name</label><input type="text" id="cf_clientName" disabled /></div>
+        <div class="form-group"><label>Contact Person</label><input type="text" id="cf_contactPerson" disabled /></div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group"><label>Designation</label><input type="text" id="cf_designation" disabled /></div>
+        <div class="form-group"><label>Phone</label><input type="text" id="cf_phone" disabled /></div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group"><label>Email</label><input type="text" id="cf_email" disabled /></div>
+        <div class="form-group"><label>BD Person (auto-resolved)</label><div id="bdPersonPicker"></div></div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group"><label>Industry Type</label><input type="text" id="cf_industry" disabled /></div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group"><label>Won Date</label><input type="text" id="cf_wonDate" disabled /></div>
+        <div class="form-group"><label>Departments Involved</label><input type="text" id="cf_departments" disabled /></div>
+      </div>
+      <div class="btn-row"><div></div><button class="btn btn-primary" onclick="goStep(2)">Next →</button></div>
+    </div>
+    <div class="form-section" id="step2">
+      <h2>Department Selection</h2>
+      <p class="subtitle">Departments are derived from the client's "Departments Involved". Select one or more to configure scope.</p>
+      <div class="assessment-grid" id="departmentGrid"></div>
+      <div id="departmentCards"></div>
+      <div class="btn-row">
+        <button class="btn btn-outline" onclick="goStep(1)">← Back</button>
+        <button class="btn btn-primary" id="step2NextBtn" onclick="validateStep2()">Next →</button>
+      </div>
+    </div>
+    <div class="form-section" id="step3">
+      <h2>Review &amp; Generate JSON</h2>
+      <p class="subtitle">Verify details. People are stored as { name, email, claims } for direct SharePoint submission.</p>
+      <div id="reviewContent"></div>
+      <div class="btn-row">
+        <button class="btn btn-outline" onclick="goStep(2)">← Back</button>
+        <button class="btn btn-primary" onclick="generateJson()">⚙ Generate JSON</button>
+        <button class="btn btn-success" id="initiateBtn" onclick="initiateProject()">🚀 Initiate</button>
+      </div>
+      <div id="json-output"></div>
+    </div>
+  </div>
+</div>
+</div>
+<script>
+// =====================================================================
+// STATE
+// =====================================================================
+var BOOTSTRAP = null;
+var CLIENTS = [];
+var META = null;
+var BD_PERSON = null;
+
+var state = {
+  currentStep: 1,
+  selectedClient: null,
+  selectedDepartments: [],
+  depts: {},
+  deptLabels: {}
+};
+
+function emptyDeptState() {
+  return {
+    collapsed: false,
+    general: { pm: null, priority: '', expectedStartDate: '', expectedEndDate: '', remarks: '' },
+    vapt: { selected: [], assets: {} },
+    services: []   // SOC/GRC/Training: [{ type, mode?, regulator?, assessmentType?, scope? }]
+  };
+}
+
+// =====================================================================
+// DOM HELPERS
+// =====================================================================
+function el(tag, attrs, kids) {
+  var n = document.createElement(tag);
+  if (attrs) {
+    Object.keys(attrs).forEach(function (k) {
+      var v = attrs[k];
+      if (v == null || v === false) return;
+      if (k === 'class') n.className = v;
+      else if (k === 'text') n.textContent = v;
+      else if (k === 'html') n.innerHTML = v;
+      else if (k === 'value') n.value = v;
+      else if (k === 'dataset') { Object.keys(v).forEach(function (d) { n.dataset[d] = v[d]; }); }
+      else if (k.slice(0, 2) === 'on' && typeof v === 'function') n.addEventListener(k.slice(2).toLowerCase(), v);
+      else n.setAttribute(k, v);
+    });
+  }
+  if (kids != null) {
+    (Array.isArray(kids) ? kids : [kids]).forEach(function (c) {
+      if (c == null) return;
+      n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+    });
+  }
+  return n;
+}
+function escapeHtml(str) {
+  return String(str == null ? '' : str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function slug(s) { return String(s).replace(/\s+/g, '-').replace(/[^\w-]/g, ''); }
+
+// =====================================================================
+// GRAPH PEOPLE SEARCH
+// =====================================================================
+async function fetchUsers(q, department) {
+  var params = [];
+  if (department) params.push('department=' + encodeURIComponent(department));
+  if (q) params.push('q=' + encodeURIComponent(q));
+  var url = '/api/users' + (params.length ? '?' + params.join('&') : '');
+  var res = await fetch(url, { credentials: 'omit' });
+  if (!res.ok) throw new Error('user search failed');
+  return await res.json();
+}
+
+// Reusable, Graph-backed people picker. Returns { element, get, set, clear }.
+// opts: { department, value, placeholder, onChange }
+function createPeoplePicker(opts) {
+  var wrap = el('div', { class: 'pp' });
+  var input = el('input', { type: 'text', class: 'pp-input', placeholder: opts.placeholder || 'Search name or email...', autocomplete: 'off' });
+  var list = el('div', { class: 'pp-list' });
+  var current = opts.value || null;
+  var timer = null;
+
+  function renderValue() {
+    input.value = current ? (current.name + (current.email ? ' <' + current.email + '>' : '')) : '';
+  }
+  if (current) renderValue();
+
+  input.addEventListener('input', function () {
+    var q = input.value.trim();
+    if (timer) clearTimeout(timer);
+    if (!q) { list.style.display = 'none'; list.innerHTML = ''; return; }
+    timer = setTimeout(function () {
+      fetchUsers(q, '').then(function (users) {
+        list.innerHTML = '';
+        if (!users.length) { list.appendChild(el('div', { class: 'pp-empty', text: 'No matches' })); list.style.display = 'block'; return; }
+        users.forEach(function (u) {
+          list.appendChild(el('div', { class: 'pp-item', onmousedown: function (e) { e.preventDefault(); select(u); } }, [
+            el('div', { class: 'pp-name', text: u.name }),
+            el('div', { class: 'pp-email', text: u.email || u.department || '' })
+          ]));
+        });
+        list.style.display = 'block';
+      }).catch(function () { list.style.display = 'none'; list.innerHTML = ''; });
+    }, 250);
+  });
+  function select(u) {
+    current = u; renderValue(); list.style.display = 'none'; list.innerHTML = '';
+    if (opts.onChange) opts.onChange(u);
+  }
+  function showUsers(users) {
+    list.innerHTML = '';
+    if (!users.length) { list.appendChild(el('div', { class: 'pp-empty', text: 'No matches' })); list.style.display = 'block'; return; }
+    users.forEach(function (u) {
+      list.appendChild(el('div', { class: 'pp-item', onmousedown: function (e) { e.preventDefault(); select(u); } }, [
+        el('div', { class: 'pp-name', text: u.name }),
+        el('div', { class: 'pp-email', text: u.email || u.department || '' })
+      ]));
+    });
+    list.style.display = 'block';
+  }
+  // On focus with an empty query, show the department roster (Microsoft-style).
+  input.addEventListener('focus', function () {
+    if (input.value.trim() || !opts.department) return;
+    fetchUsers('', opts.department).then(showUsers).catch(function () {});
+  });
+  input.addEventListener('blur', function () { setTimeout(function () { list.style.display = 'none'; }, 150); });
+  wrap.appendChild(input);
+  wrap.appendChild(list);
+  return {
+    element: wrap,
+    get: function () { return current; },
+    set: function (u) { current = u; renderValue(); },
+    clear: function () { current = null; input.value = ''; }
+  };
+}
+
+// =====================================================================
+// INIT / DATA
+// =====================================================================
+async function loadData() {
+  var meta = fetch(getApiBase() + '/api/metadata', { credentials: 'omit' }).then(function (r) { return r.json(); });
+  var boot = fetch(getApiBase() + '/api/bootstrap', { credentials: 'omit' }).then(function (r) { return r.json(); });
+  META = await meta;
+  var b = await boot;
+  BOOTSTRAP = b || null;
+  CLIENTS = Array.isArray(b.clients) ? b.clients : [];
+}
+
+function getApiBase() {
+  if (window.CSIF_API_BASE) return window.CSIF_API_BASE;
+  if (location.protocol === 'http:' || location.protocol === 'https:') return location.origin;
+  return 'http://localhost:3000';
+}
+
+async function init() {
+  await loadData();
+
+  var d = new Date();
+  var mm = String(d.getMonth() + 1); if (mm.length < 2) mm = '0' + mm;
+  var dd = String(d.getDate()); if (dd.length < 2) dd = '0' + dd;
+  document.getElementById('createdDate').textContent = mm + '/' + dd + '/' + d.getFullYear();
+
+  // Client dropdown
+  var sel = document.getElementById('clientSelect');
+  CLIENTS.forEach(function (c) {
+    sel.appendChild(el('option', { value: c.id, text: c.clientName }));
+  });
+  sel.addEventListener('change', onClientChange);
+  var status = document.getElementById('clientLoadStatus');
+  status.textContent = CLIENTS.length ? '' : 'Client Master returned no records from Graph.';
+
+  // BD Person picker (pre-filtered to the BD/reporting department)
+  var bd = createPeoplePicker({
+    department: 'Management',
+    placeholder: 'Search BD person...',
+    onChange: function (p) { BD_PERSON = p; }
+  });
+  document.getElementById('bdPersonPicker').appendChild(bd.element);
+  window.__bdPicker = bd;
+
+  renderDepartmentGrid();
+  renderDepartmentCards();
+}
+
+function onClientChange() {
+  var id = document.getElementById('clientSelect').value;
+  var c = CLIENTS.filter(function (x) { return x.id === id; })[0] || null;
+  state.selectedClient = c;
+  ['clientName', 'contactPerson', 'designation', 'phone', 'email', 'industry', 'wonDate'].forEach(function (f) {
+    document.getElementById('cf_' + f).value = c ? (c[f] || '') : '';
+  });
+  document.getElementById('cf_departments').value = c && Array.isArray(c.departmentsInvolved) ? c.departmentsInvolved.join(', ') : '';
+  // Auto-resolve BD Person from Client Master (object resolved server-side)
+  BD_PERSON = (c && c.bdPerson) ? c.bdPerson : null;
+  if (window.__bdPicker) window.__bdPicker.set(BD_PERSON);
+  applyClientDepartments();
+}
+
+function normalizeDeptName(name) {
+  return (META && META.departmentAliases && META.departmentAliases[name]) || name;
+}
+function deptLabel(name) {
+  return (state.deptLabels && state.deptLabels[name]) || name;
+}
+function getAvailableDepartments() {
+  var client = state.selectedClient;
+  var all = (META && META.departments) ? META.departments.slice() : [];
+  if (client && Array.isArray(client.departmentsInvolved) && client.departmentsInvolved.length) {
+    state.deptLabels = {};
+    var involved = client.departmentsInvolved.map(function (d) {
+      var key = normalizeDeptName(d);
+      state.deptLabels[key] = d;
+      return key;
+    }).filter(function (d) { return all.indexOf(d) !== -1; });
+    return all.filter(function (d) { return involved.indexOf(d) !== -1; });
+  }
+  state.deptLabels = {};
+  return all;
+}
+
+function applyClientDepartments() {
+  var available = getAvailableDepartments();
+  state.selectedDepartments = (state.selectedDepartments || []).filter(function (d) {
+    if (available.indexOf(d) === -1) { delete state.depts[d]; return false; }
+    return true;
+  });
+  renderDepartmentGrid();
+  syncDepartmentAvailability();
+}
+
+function renderDepartmentGrid() {
+  var grid = document.getElementById('departmentGrid');
+  grid.innerHTML = '';
+  var names = getAvailableDepartments();
+  if (!names.length) { grid.appendChild(el('p', { class: 'empty-hint', text: 'No departments listed for this client in Client Master.' })); return; }
+  names.forEach(function (name) {
+    var div = el('div', { class: 'assessment-card', dataset: { dept: name } }, [
+      el('input', { type: 'checkbox', id: 'dept-chk-' + slug(name) }),
+      el('label', { for: 'dept-chk-' + slug(name), text: deptLabel(name) })
+    ]);
+    div.addEventListener('click', function (e) {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'LABEL') return;
+      if (div.classList.contains('disabled')) return;
+      var cb = div.querySelector('input'); cb.checked = !cb.checked; toggleDepartment(name, cb.checked);
+    });
+    div.querySelector('input').addEventListener('change', function (e) { toggleDepartment(name, e.target.checked); });
+    grid.appendChild(div);
+  });
+}
+// =====================================================================
+// DEPARTMENT TOGGLE + AVAILABILITY
+// =====================================================================
+function toggleDepartment(name, selected) {
+  document.querySelectorAll('.assessment-card[data-dept]').forEach(function (c) {
+    if (c.dataset.dept === name) c.classList.toggle('selected', selected);
+  });
+  if (selected) {
+    if (state.selectedDepartments.indexOf(name) === -1) state.selectedDepartments.push(name);
+    if (!state.depts[name]) state.depts[name] = emptyDeptState();
+  } else {
+    state.selectedDepartments = state.selectedDepartments.filter(function (d) { return d !== name; });
+    delete state.depts[name];
+  }
+  syncDepartmentAvailability();
+  renderDepartmentCards();
+}
+
+function getInitiatedDetailsForClient(client) {
+  if (!client) return [];
+  var keys = [client.id, client.trackingId, client.quoteId, client.clientName];
+  if (BOOTSTRAP && BOOTSTRAP.initiatedDepartmentsByKey) {
+    for (var i = 0; i < keys.length; i += 1) {
+      var k = keys[i];
+      if (k && Array.isArray(BOOTSTRAP.initiatedDepartmentsByKey[k])) {
+        return BOOTSTRAP.initiatedDepartmentsByKey[k].map(function (e) {
+          return { department: normalizeDeptName(e.department), services: e.services, scope: e.scope };
+        });
+      }
+    }
+  }
+  return [];
+}
+
+function getInitiatedDepartmentsForClient(client) {
+  return getInitiatedDetailsForClient(client).map(function (e) { return e.department; });
+}
+
+function syncDepartmentAvailability() {
+  var client = state.selectedClient;
+  var details = getInitiatedDetailsForClient(client);
+  var initiated = details.map(function (e) { return e.department; });
+  document.querySelectorAll('.assessment-card[data-dept]').forEach(function (card) {
+    var name = card.dataset.dept;
+    var entry = details.filter(function (e) { return e.department === name; })[0];
+    var blocked = initiated.indexOf(name) !== -1;
+    card.classList.toggle('disabled', blocked);
+    var label = card.querySelector('label');
+    if (label) label.textContent = blocked ? (deptLabel(name) + ' — Already Initiated') : deptLabel(name);
+    var input = card.querySelector('input[type="checkbox"]');
+    if (input) { input.disabled = blocked; if (blocked) input.checked = false; }
+    if (blocked) card.classList.remove('selected');
+  });
+  var nextBtn = document.getElementById('step2NextBtn');
+  if (nextBtn) nextBtn.disabled = client && initiated.length > 0 && initiated.length >= getAvailableDepartments().length;
+}
+
+function orderedSelectedDepartments() {
+  return getAvailableDepartments().filter(function (d) { return state.selectedDepartments.indexOf(d) !== -1; });
+}
+
+// =====================================================================
+// RENDER DEPARTMENT CARDS
+// =====================================================================
+function renderDepartmentCards() {
+  var container = document.getElementById('departmentCards');
+  var depts = orderedSelectedDepartments();
+  var initiated = getInitiatedDepartmentsForClient(state.selectedClient);
+  if (state.selectedClient && initiated.length >= getAvailableDepartments().length) {
+    container.innerHTML = '<p class="empty-hint">All departments have already been initiated.</p>';
+    syncDepartmentAvailability();
+    return;
+  }
+  if (depts.length === 0) { container.innerHTML = '<p class="empty-hint">Select at least one department above to begin.</p>'; syncDepartmentAvailability(); return; }
+  container.innerHTML = '';
+  depts.forEach(function (name) {
+    var kind = META.departmentConfig[name] ? META.departmentConfig[name].kind : 'generic';
+    var card = el('div', { class: 'dept-card' + (state.depts[name].collapsed ? ' collapsed' : ''), id: 'deptcard-' + slug(name) });
+    card.appendChild(el('div', { class: 'dept-card-header', onclick: function () { state.depts[name].collapsed = !state.depts[name].collapsed; card.classList.toggle('collapsed'); } }, [
+      el('h3', {}, [deptLabel(name), el('span', { class: 'dept-badge', text: deptBadge(name) })]),
+      el('span', { class: 'chev', text: '▼' })
+    ]));
+    var body = el('div', { class: 'dept-card-body' });
+    if (kind === 'vapt') body.appendChild(renderVapt(name));
+    else body.appendChild(renderProjectType(name, kind));
+    body.appendChild(renderGeneral(name));
+    card.appendChild(body);
+    container.appendChild(card);
+  });
+  syncDepartmentAvailability();
+}
+
+function deptBadge(name) {
+  var ds = state.depts[name];
+  if (META.departmentConfig[name] && META.departmentConfig[name].kind === 'vapt') {
+    var n = 0; (ds.vapt.selected || []).forEach(function (a) { n += (ds.vapt.assets[a] || []).length; });
+    return n + ' asset' + (n === 1 ? '' : 's');
+  }
+  var count = (ds.services || []).length;
+  return count + ' service' + (count === 1 ? '' : 's');
+}
+
+// ---- VAPT ----
+function renderVapt(name) {
+  var cfg = META.departmentConfig[name];
+  var ds = state.depts[name];
+  var wrap = el('div');
+  wrap.appendChild(el('div', { class: 'section-label', text: 'Assessment Types', style: 'margin-top:0;' }));
+  var grid = el('div', { class: 'assessment-grid' });
+  cfg.assessmentTypes.forEach(function (at) {
+    var checked = ds.vapt.selected.indexOf(at.name) !== -1;
+    var card = el('div', { class: 'assessment-card' + (checked ? ' selected' : ''), dataset: { at: at.name } }, [
+      el('input', { type: 'checkbox', id: 'at-' + slug(name) + '-' + slug(at.name), checked: checked }),
+      el('label', { for: 'at-' + slug(name) + '-' + slug(at.name), text: at.name })
+    ]);
+    card.addEventListener('click', function (e) {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'LABEL') return;
+      var cb = card.querySelector('input'); cb.checked = !cb.checked; toggleVaptAssessment(name, at.name, cb.checked);
+    });
+    card.querySelector('input').addEventListener('change', function (e) { toggleVaptAssessment(name, at.name, e.target.checked); });
+    grid.appendChild(card);
+  });
+  wrap.appendChild(grid);
+
+  ds.vapt.selected.forEach(function (atName) {
+    var at = cfg.assessmentTypes.filter(function (x) { return x.name === atName; })[0];
+    var assets = ds.vapt.assets[atName] || [];
+    wrap.appendChild(el('div', { class: 'section-label', text: atName + ' — Assets' }));
+    var table = el('table', { class: 'asset-table' });
+    table.appendChild(el('thead', {}, el('tr', {}, [el('th', { text: 'Asset Type' }), el('th', { text: 'Count' }), el('th', { text: '' })])));
+    var tbody = el('tbody');
+    assets.forEach(function (row, idx) {
+      tbody.appendChild(el('tr', {}, [
+        el('td', {}, el('input', { type: 'text', value: row.label, oninput: function (e) { row.label = e.target.value; } })),
+        el('td', {}, el('input', { type: 'number', class: 'count', min: '0', value: row.count, oninput: function (e) { row.count = parseInt(e.target.value, 10) || 0; } })),
+        el('td', { class: 'rem', text: '×', onclick: function () { ds.vapt.assets[atName].splice(idx, 1); renderDepartmentCards(); } })
+      ]));
+    });
+    table.appendChild(tbody);
+    wrap.appendChild(table);
+    wrap.appendChild(el('button', { class: 'btn-add-other', text: '+ Add asset row', onclick: function () {
+      if (!ds.vapt.assets[atName]) ds.vapt.assets[atName] = [];
+      ds.vapt.assets[atName].push({ label: '', count: 0 }); renderDepartmentCards();
+    } }));
+  });
+  return wrap;
+}
+
+function toggleVaptAssessment(name, atName, selected) {
+  var ds = state.depts[name];
+  if (selected) {
+    if (ds.vapt.selected.indexOf(atName) === -1) ds.vapt.selected.push(atName);
+    if (!ds.vapt.assets[atName]) {
+      var cfg = META.departmentConfig[name].assessmentTypes.filter(function (x) { return x.name === atName; })[0];
+      ds.vapt.assets[atName] = (cfg && cfg.assets ? cfg.assets : []).map(function (a) { return { label: a, count: 0 }; });
+    }
+  } else {
+    ds.vapt.selected = ds.vapt.selected.filter(function (a) { return a !== atName; });
+    delete ds.vapt.assets[atName];
+  }
+  renderDepartmentCards();
+}
+
+// ---- SOC / GRC / Training ----
+function getProjectTypeTemplate(name, type) {
+  var cfg = META.departmentConfig[name];
+  if (cfg.kind === 'training') {
+    var svc = cfg.services.filter(function (s) { return s.name === type; })[0];
+    if (svc) return svc.scope;
+    if (cfg.customServices && cfg.customServices.indexOf(type) !== -1) return [META.F('Custom Scope', 'customScope', 'textarea')];
+    return [META.F('Custom Scope', 'customScope', 'textarea')];
+  }
+  var pt = cfg.projectTypes.filter(function (p) { return p.name === type; })[0];
+  if (pt) return pt.scope;
+  return [META.F('Custom Scope', 'customScope', 'textarea')];
+}
+
+function renderSelectField(label, options, value, onChange) {
+  var wrap = el('div', { class: 'scope-field', style: 'margin-bottom:0.75rem;' });
+  wrap.appendChild(el('label', {}, [label]));
+  var sel = el('select', { class: 'scope-input--select', style: 'max-width:360px;' });
+  sel.appendChild(el('option', { value: '', text: '— Select —' }));
+  options.forEach(function (o) { sel.appendChild(el('option', { value: o, text: o, selected: String(value) === String(o) })); });
+  sel.addEventListener('change', function () { onChange(sel.value); });
+  wrap.appendChild(sel);
+  return wrap;
+}
+
+// Toggle a service (by type) on/off for SOC/GRC/Training departments.
+function toggleService(name, type, selected) {
+  var cfg = META.departmentConfig[name];
+  var ds = state.depts[name];
+  if (selected) {
+    if (!ds.services.some(function (s) { return s.type === type; })) {
+      var svc = { type: type };
+      if (cfg.kind === 'grc') { svc.regulator = ''; svc.assessmentType = ''; }
+      else if (cfg.kind === 'training') { svc.mode = ''; }
+      else { svc.scope = {}; }
+      ds.services.push(svc);
+    }
+  } else {
+    ds.services = ds.services.filter(function (s) { return s.type !== type; });
+  }
+  renderDepartmentCards();
+}
+
+function renderProjectType(name, kind) {
+  var cfg = META.departmentConfig[name];
+  var ds = state.depts[name];
+  var wrap = el('div');
+
+  // Training: a single service + delivery mode.
+  if (kind === 'training') {
+    if (!ds.services.length) ds.services.push({ type: cfg.services[0] ? cfg.services[0].name : '', mode: '' });
+    var svc0 = ds.services[0];
+    var trainTypes = cfg.services.map(function (s) { return s.name; });
+    if (cfg.customServices) trainTypes = trainTypes.concat(cfg.customServices);
+    wrap.appendChild(renderSelectField('Service', trainTypes, svc0.type, function (v) {
+      svc0.type = v; svc0.mode = ''; renderDepartmentCards();
+    }));
+    var svcDef = cfg.services.filter(function (s) { return s.name === svc0.type; })[0];
+    if (svcDef && svcDef.mode) wrap.appendChild(renderSelectField('Mode', svcDef.mode, svc0.mode, function (v) { svc0.mode = v; renderDepartmentCards(); }));
+    wrap.appendChild(el('div', { class: 'hint', text: 'No scope required — delivery mode is captured above.' }));
+    return wrap;
+  }
+
+  // GRC / SOC: multiple services selected from a checklist.
+  var labelTxt = kind === 'grc' ? 'Audit Types (Services)' : 'Project Types (Services)';
+  var types = kind === 'grc'
+    ? (cfg.auditTypes || [])
+    : cfg.projectTypes.map(function (p) { return p.name; }).concat(['Other']);
+
+  var selectedTypes = ds.services.map(function (s) { return s.type; });
+  wrap.appendChild(el('div', { class: 'section-label', text: labelTxt, style: 'margin-top:0;' }));
+  var grid = el('div', { class: 'assessment-grid' });
+  types.forEach(function (t) {
+    var checked = selectedTypes.indexOf(t) !== -1;
+    var card = el('div', { class: 'assessment-card' + (checked ? ' selected' : ''), dataset: { st: t } }, [
+      el('input', { type: 'checkbox', id: 'st-' + slug(name) + '-' + slug(t), checked: checked }),
+      el('label', { for: 'st-' + slug(name) + '-' + slug(t), text: t })
+    ]);
+    card.addEventListener('click', function (e) {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'LABEL') return;
+      var cb = card.querySelector('input'); cb.checked = !cb.checked; toggleService(name, t, cb.checked);
+    });
+    card.querySelector('input').addEventListener('change', function (e) { toggleService(name, t, e.target.checked); });
+    grid.appendChild(card);
+  });
+  wrap.appendChild(grid);
+
+  // One sub-card per selected service.
+  ds.services.forEach(function (svc, idx) {
+    var card = el('div', { class: 'sub-card' });
+    card.appendChild(el('div', { class: 'sub-card-head' }, [
+      el('strong', {}, svc.type || ('Service ' + (idx + 1))),
+      el('span', { class: 'rem', text: '×', onclick: function () {
+        ds.services = ds.services.filter(function (x) { return x !== svc; }); renderDepartmentCards();
+      } })
+    ]));
+    if (kind === 'grc') {
+      card.appendChild(renderSelectField('Regulator / Exchange', cfg.regulators, svc.regulator, function (v) { svc.regulator = v; renderDepartmentCards(); }));
+      card.appendChild(renderSelectField('Assessment Type', cfg.assessmentTypes, svc.assessmentType, function (v) { svc.assessmentType = v; renderDepartmentCards(); }));
+    } else {
+      if (svc.type === 'Other') {
+        card.appendChild(el('div', { class: 'section-label', text: 'Project Type Name' }));
+        card.appendChild(el('input', { type: 'text', value: svc.customTypeName || '', placeholder: 'Custom project type name', oninput: function (e) { svc.customTypeName = e.target.value; } }));
+      }
+      if (!svc.scope) svc.scope = {};
+      var template = svc.type === 'Other' ? [] : getProjectTypeTemplate(name, svc.type);
+      card.appendChild(renderScopeBuilder(template, svc.scope));
+    }
+    wrap.appendChild(card);
+  });
+  return wrap;
+}
+
+// Dynamic Scope Builder: a free-form key/value table. Users can Add Row,
+// Delete Row, Rename Key and Edit Value. Seeded from the project-type
+// template (with example defaults) but never fixed — every row is editable.
+function coerceScopeDisplay(v) {
+  if (v == null) return '';
+  if (typeof v === 'number') return String(v);
+  return String(v);
+}
+
+function uniqueScopeKey(values, base) {
+  var k = base, i = 1;
+  while (values[k] !== undefined) { i += 1; k = base + ' ' + i; }
+  return k;
+}
+
+function renderScopeBuilder(seedFields, values) {
+  // Seed defaults the first time a project type is chosen (empty scope).
+  if (values && Object.keys(values).length === 0 && seedFields && seedFields.length) {
+    seedFields.forEach(function (f) {
+      values[f.key] = (f.default !== undefined && f.default !== '') ? f.default : '';
+    });
+  }
+  var wrap = el('div');
+  wrap.appendChild(el('div', { class: 'section-label', text: 'Scope Builder', style: 'margin-top:0;' }));
+  var table = el('table', { class: 'asset-table', style: 'margin-bottom:0.5rem;' });
+  table.appendChild(el('thead', {}, el('tr', {}, [
+    el('th', { text: 'Field (Key)' }), el('th', { text: 'Value' }), el('th', { text: '' })
+  ])));
+  var tbody = el('tbody');
+  Object.keys(values).forEach(function (key) { tbody.appendChild(renderScopeRow(values, key)); });
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+  wrap.appendChild(el('button', { class: 'btn-add-other', text: '+ Add Row', onclick: function () {
+    var nk = uniqueScopeKey(values, 'New Field');
+    values[nk] = '';
+    renderDepartmentCards();
+  } }));
+  return wrap;
+}
+
+function renderScopeRow(values, key) {
+  var tr = el('tr');
+  var keyInput = el('input', { type: 'text', value: key, placeholder: 'Field name', style: 'width:100%;' });
+  // Commit the rename on change (blur / Enter) so editing does not lose focus.
+  keyInput.addEventListener('change', function () {
+    var nk = keyInput.value.trim();
+    if (!nk || nk === key) return;
+    var v = values[key];
+    delete values[key];
+    if (values[nk] !== undefined) nk = uniqueScopeKey(values, nk);
+    values[nk] = v;
+    renderDepartmentCards();
+  });
+  var valInput = el('input', { type: 'text', value: coerceScopeDisplay(values[key]), placeholder: 'Value', style: 'width:100%;' });
+  valInput.addEventListener('input', function () { values[key] = valInput.value; });
+  tr.appendChild(el('td', {}, keyInput));
+  tr.appendChild(el('td', {}, valInput));
+  tr.appendChild(el('td', { class: 'rem', text: '×', onclick: function () { delete values[key]; renderDepartmentCards(); } }));
+  return tr;
+}
+
+function renderGeneral(name) {
+  var ds = state.depts[name];
+  var wrap = el('div');
+  wrap.appendChild(el('div', { class: 'section-label', text: 'Department General Information' }));
+  var grid = el('div', { class: 'scope-grid' });
+  META.departmentGeneral.forEach(function (f) {
+    var fieldWrap = el('div', { class: 'scope-field' + (f.type === 'textarea' ? ' full' : '') });
+    fieldWrap.appendChild(el('label', {}, [f.label + (f.required ? ' *' : '')]));
+    if (f.type === 'people') {
+      var picker = createPeoplePicker({
+        department: f.picker ? f.picker.department : '',
+        value: (typeof ds.general[f.key] === 'object' ? ds.general[f.key] : null),
+        placeholder: 'Search ' + f.label + '...',
+        onChange: function (p) { ds.general[f.key] = p; }
+      });
+      fieldWrap.appendChild(picker.element);
+    } else if (f.type === 'select') {
+      var sel = el('select', { class: 'scope-input--select' });
+      sel.appendChild(el('option', { value: '', text: '— Select —' }));
+      (f.options || []).forEach(function (o) { sel.appendChild(el('option', { value: o, text: o, selected: String(ds.general[f.key]) === String(o) })); });
+      sel.addEventListener('change', function () { ds.general[f.key] = sel.value; });
+      fieldWrap.appendChild(sel);
+    } else if (f.type === 'date') {
+      fieldWrap.appendChild(el('input', { type: 'date', value: ds.general[f.key] || '', oninput: function (e) { ds.general[f.key] = e.target.value; } }));
+    } else if (f.type === 'textarea') {
+      fieldWrap.appendChild(el('textarea', { oninput: function (e) { ds.general[f.key] = e.target.value; } }, ds.general[f.key] || ''));
+    } else {
+      fieldWrap.appendChild(el('input', { type: 'text', value: ds.general[f.key] || '', oninput: function (e) { ds.general[f.key] = e.target.value; } }));
+    }
+    grid.appendChild(fieldWrap);
+  });
+  wrap.appendChild(grid);
+  return wrap;
+}
+// =====================================================================
+// STEP NAVIGATION + VALIDATION
+// =====================================================================
+function goStep(step) {
+  if (step >= 2 && !state.selectedClient) { alert('Please select a client first.'); document.getElementById('clientSelect').focus(); return; }
+  state.currentStep = step;
+  document.querySelectorAll('.form-section').forEach(function (s) { s.classList.remove('active'); });
+  document.getElementById('step' + step).classList.add('active');
+  document.querySelectorAll('.step-indicator .step').forEach(function (s) {
+    s.classList.remove('active', 'completed');
+    var n = parseInt(s.dataset.step, 10);
+    if (n === step) s.classList.add('active');
+    else if (n < step) s.classList.add('completed');
+  });
+  if (step === 3) renderReview();
+  document.querySelector('.csif-app').scrollIntoView({ behavior: 'smooth' });
+}
+
+function validateStep2() {
+  if (state.selectedDepartments.length === 0) { alert('Please select at least one department.'); return; }
+  var initiated = getInitiatedDepartmentsForClient(state.selectedClient);
+  if (state.selectedClient && initiated.length >= getAvailableDepartments().length) { alert('All departments have already been initiated.'); return; }
+  for (var i = 0; i < orderedSelectedDepartments().length; i++) {
+    var name = orderedSelectedDepartments()[i];
+    var ds = state.depts[name];
+    var kind = META.departmentConfig[name].kind;
+    if (kind === 'vapt') {
+      if (!ds.vapt.selected.length) { alert('Select at least one assessment type for: ' + name); return; }
+      for (var a = 0; a < ds.vapt.selected.length; a++) {
+        var rows = ds.vapt.assets[ds.vapt.selected[a]] || [];
+        var total = 0, missingName = false;
+        rows.forEach(function (r) { total += r.count || 0; if (!String(r.label).trim()) missingName = true; });
+        if (total === 0) { alert('Enter at least one asset count under ' + name + ' → ' + ds.vapt.selected[a]); return; }
+        if (missingName) { alert('Name all asset rows under ' + name + ' → ' + ds.vapt.selected[a]); return; }
+      }
+    } else {
+      if (kind === 'training') {
+        if (!ds.services.length || !ds.services[0].type) { alert('Select a Service for: ' + name); return; }
+        if (!ds.services[0].mode) { alert('Select a delivery Mode for: ' + name); return; }
+      } else {
+        // grc / soc — multiple services
+        if (!ds.services.length) { alert('Select at least one service for: ' + name); return; }
+        for (var si2 = 0; si2 < ds.services.length; si2 += 1) {
+          var svc = ds.services[si2];
+          if (kind === 'grc') {
+            if (!svc.regulator) { alert('Select a Regulator / Exchange for ' + (svc.type || 'service') + ' in: ' + name); return; }
+            if (!svc.assessmentType) { alert('Select an Assessment Type for ' + (svc.type || 'service') + ' in: ' + name); return; }
+          }
+        }
+      }
+      goStep(3);
+    }
+  }
+  goStep(3);
+}
+
+// =====================================================================
+// REVIEW + JSON
+// =====================================================================
+function personToJson(p) {
+  if (!p || !p.name) return null;
+  return {
+    id: p.id || '',
+    name: p.name,
+    email: p.email || '',
+    claims: p.claims || (p.email ? 'i:0#.f|membership|' + p.email : '')
+  };
+}
+
+function renderReview() {
+  var c = state.selectedClient || {};
+  var html = '<div class="review-summary">' +
+    row('Client Name', c.clientName) +
+    row('Contact Person', c.contactPerson) +
+    row('Designation', c.designation) +
+    row('Phone', c.phone) +
+    row('Email', c.email) +
+    row('BD Person', BD_PERSON ? BD_PERSON.name + (BD_PERSON.email ? ' <' + BD_PERSON.email + '>' : '') : '') +
+  '</div>';
+  html += '<h4 style="margin-bottom:0.5rem;">Delivery Scope Tree</h4><div class="review-tree">';
+  var depts = orderedSelectedDepartments();
+  if (!depts.length) html += '<div>No departments selected.</div>';
+  else {
+    html += '<div style="font-weight:700;">' + escapeHtml(c.clientName || 'Project') + ' Root</div>';
+    depts.forEach(function (name, di) {
+      var lastD = di === depts.length - 1;
+      var dPipe = lastD ? '    ' : '│   ';
+      html += '<div style="color:#3b82f6;font-weight:600;">' + (lastD ? '└── ' : '├── ') + escapeHtml(deptLabel(name)) + '</div>';
+      var ds = state.depts[name];
+      var kind = META.departmentConfig[name].kind;
+      if (kind === 'vapt') {
+        ds.vapt.selected.forEach(function (at, si) {
+          var lastS = si === ds.vapt.selected.length - 1;
+          html += '<div>' + dPipe + (lastS ? '└── ' : '├── ') + '<span style="color:#0f766e;">' + escapeHtml(at) + '</span></div>';
+          (ds.vapt.assets[at] || []).forEach(function (r, ri) {
+            var lastR = ri === (ds.vapt.assets[at] || []).length - 1;
+            html += '<div>' + dPipe + (lastS ? '    ' : '│   ') + (lastR ? '└── ' : '├── ') + escapeHtml(r.label || 'unnamed') + ': <span style="color:#475569;">' + (r.count || 0) + '</span></div>';
+          });
+        });
+      } else {
+        if (kind === 'training') {
+          var t0 = ds.services[0] || {};
+          html += '<div>' + dPipe + '└── <span style="color:#0f766e;">' + escapeHtml(t0.type || '—') + '</span>' +
+            (t0.mode ? ' <span style="color:#475569;">(' + escapeHtml(t0.mode) + ')</span>' : '') + '</div>';
+        } else {
+          ds.services.forEach(function (s, si) {
+            var lastS = si === ds.services.length - 1;
+            var sTitle = kind === 'grc' ? (s.type || '—') : ((s.type === 'Other' ? (s.customTypeName || 'Other') : (s.type || '—')));
+            html += '<div>' + dPipe + (lastS ? '└── ' : '├── ') + '<span style="color:#0f766e;">' + escapeHtml(sTitle) + '</span></div>';
+            var sPipe = dPipe + (lastS ? '    ' : '│   ');
+            if (kind === 'grc') {
+              html += '<div>' + sPipe + '├── Regulator / Exchange: <span style="color:#475569;">' + escapeHtml(s.regulator || '—') + '</span></div>';
+              html += '<div>' + sPipe + '└── Assessment Type: <span style="color:#475569;">' + escapeHtml(s.assessmentType || '—') + '</span></div>';
+            } else {
+              Object.keys(s.scope || {}).forEach(function (k) {
+                if (k.indexOf('__') === 0) return;
+                var v = s.scope[k];
+                if (v == null || String(v).trim() === '') return;
+                html += '<div>' + sPipe + '├── ' + escapeHtml(k) + ': <span style="color:#475569;">' + escapeHtml(String(v)) + '</span></div>';
+              });
+            }
+          });
+        }
+      }
+    });
+  }
+  html += '</div>';
+  document.getElementById('reviewContent').innerHTML = html;
+}
+
+function row(label, value) {
+  return '<div class="row"><span class="label">' + escapeHtml(label) + '</span><strong>' + escapeHtml(value || '—') + '</strong></div>';
+}
+
+function formatServiceScopeText(kind, services) {
+  if (!services || !services.length) return '—';
+  return services.map(function (s) {
+    if (kind === 'grc') {
+      var lines = [
+        'Regulator / Exchange: ' + (s.regulator || '—'),
+        'Assessment Type: ' + (s.assessmentType || '—')
+      ];
+      return '• ' + (s.type || 'Service') + '\n  ' + lines.join('\n  ');
+    }
+    var scope = s.scope || {};
+    var detail = Object.keys(scope).filter(function (k) {
+      var v = scope[k]; return !(v == null || String(v).trim() === '');
+    }).map(function (k) { return '  ' + k + ': ' + scope[k]; });
+    var title = s.type === 'Other' ? (s.customTypeName || 'Other') : s.type;
+    return '• ' + title + (detail.length ? '\n' + detail.join('\n') : '');
+  }).join('\n\n');
+}
+
+function buildPayload() {
+  var c = state.selectedClient || {};
+  var client = {
+    name: c.clientName || '', contact: c.contactPerson || '', designation: c.designation || '',
+    phone: c.phone || '', email: c.email || '',
+    requirement: c.requirement || '', industry: c.industry || '', wonDate: c.wonDate || '', departmentsInvolved: c.departmentsInvolved || []
+  };
+  var departments = orderedSelectedDepartments().map(function (name) {
+    var ds = state.depts[name];
+    var kind = META.departmentConfig[name].kind;
+    var dept = { department: normalizeDeptName(name) };
+    if (kind === 'vapt') {
+      dept.assessments = ds.vapt.selected.map(function (at) {
+        return { assessment: at, assets: (ds.vapt.assets[at] || []).map(function (r) { return { label: r.label, count: r.count || 0 }; }) };
+      });
+      // Clean, readable text scope (no nested JSON) for SharePoint/email.
+      dept.scope = dept.assessments.map(function (a) {
+        var lines = (a.assets || []).map(function (r) { return '  - ' + r.label + ': ' + (r.count || 0); });
+        return a.assessment + ':\n' + lines.join('\n');
+      }).join('\n');
+    } else if (kind === 'grc') {
+      dept.services = ds.services.map(function (s) { return s.type; });
+      dept.serviceDetails = ds.services.map(function (s) {
+        return { type: s.type, regulator: s.regulator || '', assessmentType: s.assessmentType || '' };
+      });
+      dept.scope = formatServiceScopeText('grc', ds.services);
+    } else if (kind === 'training') {
+      var svcT = ds.services[0] || {};
+      var trainType = svcT.type || '';
+      dept.services = [trainType];
+      dept.serviceDetails = [{ type: trainType, mode: svcT.mode || '' }];
+      dept.mode = svcT.mode || '';
+      dept.scope = 'Mode: ' + (svcT.mode || '—');
+    } else {
+      dept.services = ds.services.map(function (s) { return s.type === 'Other' ? (s.customTypeName || 'Other') : s.type; });
+      dept.serviceDetails = ds.services.map(function (s) {
+        return { type: s.type === 'Other' ? (s.customTypeName || 'Other') : s.type, scope: s.scope || {} };
+      });
+      dept.scope = formatServiceScopeText('soc', ds.services);
+    }
+    dept.general = {
+      priority: ds.general.priority || '',
+      expectedStartDate: ds.general.expectedStartDate || '',
+      expectedEndDate: ds.general.expectedEndDate || '',
+      remarks: ds.general.remarks || ''
+    };
+    return dept;
+  });
+  return { client: client, bdPerson: personToJson(BD_PERSON), departments: departments };
+}
+
+function generateJson() {
+  var payload = buildPayload();
+  var jsonStr = JSON.stringify(payload, null, 2);
+  var elOut = document.getElementById('json-output');
+  elOut.innerHTML =
+    '<div class="json-actions"><button class="copy-btn" id="copyJsonBtn">Copy JSON</button>' +
+    '<button class="copy-btn" id="downloadJsonBtn">Download JSON</button></div>' +
+    '<div id="jsonText">' + escapeHtml(jsonStr) + '</div>';
+  elOut.classList.add('visible');
+  document.getElementById('copyJsonBtn').addEventListener('click', function () {
+    var btn = this;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(jsonStr).then(function () { btn.textContent = 'Copied!'; setTimeout(function () { btn.textContent = 'Copy JSON'; }, 2000); });
+    }
+  });
+  document.getElementById('downloadJsonBtn').addEventListener('click', function () {
+    var blob = new Blob([jsonStr], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    var cname = (state.selectedClient && state.selectedClient.clientName ? state.selectedClient.clientName : 'project').replace(/\s+/g, '_');
+    a.href = url; a.download = 'project_initiation_' + cname + '.json';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  });
+}
+
+// Post the generated payload to /api/initiate, which creates one Main
+// Tracker item per department. Falls back to showing the JSON on failure.
+async function initiateProject() {
+  var payload = buildPayload();
+  var btn = document.getElementById('initiateBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Initiating…'; }
+  var elOut = document.getElementById('json-output');
+  try {
+    var res = await fetch(getApiBase() + '/api/initiate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'omit',
+      body: JSON.stringify({ payload: payload })
+    });
+    var data = await res.json();
+    var warningsHtml = '';
+    if (data.warnings && data.warnings.length) {
+      warningsHtml = '<div class="json-actions" style="color:#f59e0b;font-weight:700;">⚠ Warnings (item saved, some fields skipped):</div>' +
+        '<div style="white-space:pre-wrap;color:#b45309;">' +
+        escapeHtml(data.warnings.map(function (w) { return '• ' + w.message; }).join('\n')) + '</div>';
+    }
+    var heading = res.ok
+      ? '<div class="json-actions" style="color:#10b981;font-weight:700;">✓ Saved ' + (data.created ? data.created.length : 0) + ' item(s) to Main Tracker</div>'
+      : '<div class="json-actions" style="color:#ef4444;font-weight:700;">⚠ Save failed — showing JSON payload</div>';
+    var jsonStr = JSON.stringify(data, null, 2);
+    elOut.innerHTML = heading + warningsHtml + '<div id="jsonText" style="white-space:pre-wrap;">' + escapeHtml(jsonStr) + '</div>';
+    elOut.classList.add('visible');
+  } catch (err) {
+    elOut.innerHTML = '<div class="json-actions" style="color:#ef4444;font-weight:700;">⚠ Could not reach server — showing JSON payload</div>' +
+      '<div id="jsonText" style="white-space:pre-wrap;">' + escapeHtml(JSON.stringify(payload, null, 2)) + '</div>';
+    elOut.classList.add('visible');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🚀 Initiate'; }
+  }
+}
+
+// =====================================================================
+// BOOT
+// =====================================================================
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+else init();
+</script>
+</body>
+</html>
