@@ -164,8 +164,6 @@ var TRAINING_SERVICES = [
 // VAPT, SOC, Compliance). Update these to match your directory.
 var DEPARTMENT_GENERAL = [
   F('Priority', 'priority', 'select', ['High', 'Medium', 'Low']),
-  F('Expected Start Date', 'expectedStartDate', 'date'),
-  F('Expected End Date', 'expectedEndDate', 'date'),
   F('Remarks', 'remarks', 'textarea')
 ];
 
