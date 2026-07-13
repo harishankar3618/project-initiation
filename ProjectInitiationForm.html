@@ -200,7 +200,7 @@ var state = {
 function emptyDeptState() {
   return {
     collapsed: false,
-    general: { pm: null, priority: '', expectedStartDate: '', expectedEndDate: '', remarks: '' },
+    general: { pm: null, priority: '', remarks: '' },
     vapt: { selected: [], assets: {} },
     services: []   // SOC/GRC/Training: [{ type, mode?, regulator?, assessmentType?, scope? }]
   };
@@ -995,8 +995,6 @@ function buildPayload() {
     }
     dept.general = {
       priority: ds.general.priority || '',
-      expectedStartDate: ds.general.expectedStartDate || '',
-      expectedEndDate: ds.general.expectedEndDate || '',
       remarks: ds.general.remarks || ''
     };
     return dept;
