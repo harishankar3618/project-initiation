@@ -1,4 +1,5 @@
 const path = require('path');
+const os = require('os');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -12,7 +13,31 @@ const { graphSearchUsers } = require('./src/graphClient');
 const metadata = require('./src/metadata');
 
 const app = express();
-const port = Number(process.env.PORT || 3000);
+const port = Number(process.env.PORT || 45821);
+
+function getLocalIPv4() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return '127.0.0.1';
+}
+
+function validateEnv() {
+  const required = ['TENANT_ID', 'CLIENT_ID', 'CLIENT_SECRET'];
+  const missing = required.filter(function (key) { return !process.env[key]; });
+  if (missing.length) {
+    console.error('FATAL: Missing required environment variables: ' + missing.join(', '));
+    console.error('Please check your .env file.');
+    process.exit(1);
+  }
+}
+
+validateEnv();
 
 // Trust proxy (required when behind Nginx/load balancer)
 app.set('trust proxy', 1);
@@ -30,6 +55,7 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrcAttr: ["'unsafe-inline'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", "data:", "https:"],
       connectSrc: ["'self'"],
@@ -66,7 +92,7 @@ app.use(express.json({ limit: '1mb' }));
 // Request logging
 if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('combined', {
-    skip: function (req) { return req.url === '/api/health'; }
+    skip: function (req) { return req.url === '/health'; }
   }));
 }
 
@@ -90,40 +116,13 @@ const initiateLimiter = rateLimit({
 app.use('/api/', generalLimiter);
 app.use('/api/initiate', initiateLimiter);
 
-// Health check with dependency verification
-app.get('/api/health', async function (req, res) {
-  const health = {
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    requestId: req.id,
-    dependencies: {
-      graph: 'unknown',
-      sharepoint: 'unknown'
-    }
-  };
-
-  const healthCheckTimeout = Number(process.env.HEALTH_CHECK_TIMEOUT_MS) || 5000;
-
-  async function checkWithTimeout(fn) {
-    return Promise.race([
-      fn(),
-      new Promise(function (_, reject) {
-        setTimeout(function () { reject(new Error('Health check timed out')); }, healthCheckTimeout);
-      })
-    ]);
-  }
-
-  try {
-    const { getAccessToken } = require('./src/auth');
-    const token = await checkWithTimeout(getAccessToken);
-    health.dependencies.graph = token ? 'healthy' : 'degraded';
-  } catch (e) {
-    health.dependencies.graph = 'unhealthy';
-    health.status = 'degraded';
-  }
-
-  const statusCode = health.status === 'healthy' ? 200 : 503;
-  res.status(statusCode).json(health);
+// Health endpoint
+app.get('/health', function (_req, res) {
+  res.json({
+    status: 'OK',
+    uptime: process.uptime(),
+    version: '1.0.0'
+  });
 });
 
 // Metadata-driven configuration
@@ -195,11 +194,27 @@ app.use(function (err, req, res, _next) {
   });
 });
 
-// Graceful shutdown
-const server = app.listen(port, function () {
-  console.log('Cyber PMO portal running at http://localhost:' + port);
+// 404 handler
+app.use(function (req, res) {
+  res.status(404).json({ error: 'Not found' });
 });
 
+// Start server
+const localIPv4 = getLocalIPv4();
+const server = app.listen(port, '0.0.0.0', function () {
+  console.log('\n========================================');
+  console.log('  PMO Project Initiation Portal');
+  console.log('========================================');
+  console.log('  Server Started Successfully\n');
+  console.log('  Local:');
+  console.log('  http://localhost:' + port);
+  console.log('');
+  console.log('  Network:');
+  console.log('  http://' + localIPv4 + ':' + port);
+  console.log('\n========================================\n');
+});
+
+// Graceful shutdown
 function shutdown(signal) {
   console.log('Received ' + signal + '. Shutting down gracefully...');
   server.close(function () {
@@ -214,3 +229,13 @@ function shutdown(signal) {
 
 process.on('SIGTERM', function () { shutdown('SIGTERM'); });
 process.on('SIGINT', function () { shutdown('SIGINT'); });
+
+process.on('uncaughtException', function (err) {
+  console.error('Uncaught exception:', err);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', function (reason) {
+  console.error('Unhandled promise rejection:', reason);
+  process.exit(1);
+});

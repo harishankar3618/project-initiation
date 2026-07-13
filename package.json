@@ -9,7 +9,7 @@
   },
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js",
+    "dev": "nodemon server.js",
     "lint": "echo 'No linter configured. Add ESLint or Biome for production.'"
   },
   "dependencies": {
@@ -20,5 +20,8 @@
     "compression": "^1.7.4",
     "morgan": "^1.10.0",
     "express-rate-limit": "^7.1.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0"
   }
 }

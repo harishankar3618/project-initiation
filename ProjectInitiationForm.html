@@ -3,7 +3,6 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; font-src 'self' data:; object-src 'none'; frame-ancestors 'self';" />
 <title>Cybersecurity PMO — Project Initiation</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -146,9 +145,16 @@
       </div>
       <div class="form-grid">
         <div class="form-group"><label>Won Date</label><input type="text" id="cf_wonDate" disabled /></div>
-        <div class="form-group"><label>Departments Involved</label><input type="text" id="cf_departments" disabled /></div>
+        <div class="form-group">
+          <label>Departments Involved</label>
+          <div style="display:flex;align-items:center;gap:0.5rem;">
+            <input type="text" id="cf_departments" disabled style="flex:1;" />
+            <span id="initiationProgress" style="font-size:0.85rem;font-weight:600;color:#64748b;white-space:nowrap;"></span>
+            <button id="resetInitiationBtn" style="font-size:0.75rem;color:#ef4444;background:none;border:none;cursor:pointer;display:none;" title="Reset initiated departments for this client">✕ Reset</button>
+          </div>
+        </div>
       </div>
-      <div class="btn-row"><div></div><button class="btn btn-primary" onclick="goStep(2)">Next →</button></div>
+      <div class="btn-row"><div></div><button class="btn btn-primary" id="step1NextBtn">Next →</button></div>
     </div>
     <div class="form-section" id="step2">
       <h2>Department Selection</h2>
@@ -156,8 +162,8 @@
       <div class="assessment-grid" id="departmentGrid"></div>
       <div id="departmentCards"></div>
       <div class="btn-row">
-        <button class="btn btn-outline" onclick="goStep(1)">← Back</button>
-        <button class="btn btn-primary" id="step2NextBtn" onclick="validateStep2()">Next →</button>
+        <button class="btn btn-outline" id="step2BackBtn">← Back</button>
+        <button class="btn btn-primary" id="step2NextBtn">Next →</button>
       </div>
     </div>
     <div class="form-section" id="step3">
@@ -165,9 +171,9 @@
       <p class="subtitle">Verify details. People are stored as { name, email, claims } for direct SharePoint submission.</p>
       <div id="reviewContent"></div>
       <div class="btn-row">
-        <button class="btn btn-outline" onclick="goStep(2)">← Back</button>
-        <button class="btn btn-primary" onclick="generateJson()">⚙ Generate JSON</button>
-        <button class="btn btn-success" id="initiateBtn" onclick="initiateProject()">🚀 Initiate</button>
+        <button class="btn btn-outline" id="step3BackBtn">← Back</button>
+        <button class="btn btn-primary" id="generateJsonBtn">⚙ Generate JSON</button>
+        <button class="btn btn-success" id="initiateBtn">🚀 Initiate</button>
       </div>
       <div id="json-output"></div>
     </div>
@@ -322,7 +328,7 @@ async function loadData() {
 function getApiBase() {
   if (window.CSIF_API_BASE) return window.CSIF_API_BASE;
   if (location.protocol === 'http:' || location.protocol === 'https:') return location.origin;
-  return 'http://localhost:3000';
+  return 'http://localhost:45821';
 }
 
 async function init() {
@@ -367,6 +373,7 @@ function onClientChange() {
   BD_PERSON = (c && c.bdPerson) ? c.bdPerson : null;
   if (window.__bdPicker) window.__bdPicker.set(BD_PERSON);
   applyClientDepartments();
+  updateInitiationProgress();
 }
 
 function normalizeDeptName(name) {
@@ -806,6 +813,7 @@ function goStep(step) {
     else if (n < step) s.classList.add('completed');
   });
   if (step === 3) renderReview();
+  if (step === 1) updateInitiationProgress();
   document.querySelector('.csif-app').scrollIntoView({ behavior: 'smooth' });
 }
 
@@ -947,6 +955,7 @@ function formatServiceScopeText(kind, services) {
 function buildPayload() {
   var c = state.selectedClient || {};
   var client = {
+    id: c.id || '',
     name: c.clientName || '', contact: c.contactPerson || '', designation: c.designation || '',
     phone: c.phone || '', email: c.email || '',
     requirement: c.requirement || '', industry: c.industry || '', wonDate: c.wonDate || '', departmentsInvolved: c.departmentsInvolved || []
@@ -1047,6 +1056,12 @@ async function initiateProject() {
     var jsonStr = JSON.stringify(data, null, 2);
     elOut.innerHTML = heading + warningsHtml + '<div id="jsonText" style="white-space:pre-wrap;">' + escapeHtml(jsonStr) + '</div>';
     elOut.classList.add('visible');
+    if (res.ok && data.created && data.created.length && payload.client && payload.client.id) {
+      updateLocalInitiatedState(payload.client, payload.departments);
+      updateInitiationProgress();
+      syncDepartmentAvailability();
+      renderDepartmentCards();
+    }
   } catch (err) {
     elOut.innerHTML = '<div class="json-actions" style="color:#ef4444;font-weight:700;">⚠ Could not reach server — showing JSON payload</div>' +
       '<div id="jsonText" style="white-space:pre-wrap;">' + escapeHtml(JSON.stringify(payload, null, 2)) + '</div>';
@@ -1057,10 +1072,96 @@ async function initiateProject() {
 }
 
 // =====================================================================
+// INITIATION PROGRESS
+// =====================================================================
+function updateInitiationProgress() {
+  var client = state.selectedClient;
+  var progressEl = document.getElementById('initiationProgress');
+  var resetBtn = document.getElementById('resetInitiationBtn');
+  if (!client || !progressEl) {
+    if (progressEl) progressEl.textContent = '';
+    if (resetBtn) resetBtn.style.display = 'none';
+    return;
+  }
+  var available = getAvailableDepartments();
+  if (!available.length) { progressEl.textContent = ''; if (resetBtn) resetBtn.style.display = 'none'; return; }
+  var initiated = getInitiatedDepartmentsForClient(client);
+  var done = initiated.length;
+  var total = available.length;
+  if (done >= total) {
+    progressEl.textContent = 'Done';
+    progressEl.style.color = '#10b981';
+  } else {
+    progressEl.textContent = done + '/' + total;
+    progressEl.style.color = done > 0 ? '#f59e0b' : '#64748b';
+  }
+  if (resetBtn) resetBtn.style.display = done > 0 ? 'inline' : 'none';
+}
+
+function resetInitiation() {
+  var client = state.selectedClient;
+  if (!client || !BOOTSTRAP || !BOOTSTRAP.initiatedDepartmentsByKey) return;
+  var keys = [client.id, client.trackingId, client.quoteId, client.clientName];
+  keys.forEach(function (key) {
+    if (!key) return;
+    delete BOOTSTRAP.initiatedDepartmentsByKey[key];
+  });
+  updateInitiationProgress();
+  syncDepartmentAvailability();
+  renderDepartmentCards();
+}
+
+function updateLocalInitiatedState(client, departments) {
+  if (!BOOTSTRAP || !BOOTSTRAP.initiatedDepartmentsByKey || !departments || !departments.length || !client) return;
+  var keys = [client.id, client.trackingId, client.quoteId, client.clientName];
+  departments.forEach(function (dept) {
+    var deptName = normalizeDeptName(typeof dept === 'object' ? dept.department : dept);
+    var services = typeof dept === 'object' ? (dept.services || '') : '';
+    var scope = typeof dept === 'object' ? (dept.scope || '') : '';
+    keys.forEach(function (key) {
+      if (!key) return;
+      if (!BOOTSTRAP.initiatedDepartmentsByKey[key]) {
+        BOOTSTRAP.initiatedDepartmentsByKey[key] = [];
+      }
+      if (!BOOTSTRAP.initiatedDepartmentsByKey[key].some(function (e) { return e.department === deptName; })) {
+        BOOTSTRAP.initiatedDepartmentsByKey[key].push({ department: deptName, services: services, scope: scope });
+      }
+    });
+  });
+}
+
+// =====================================================================
 // BOOT
 // =====================================================================
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
-else init();
+function bindEvents() {
+  var step1Next = document.getElementById('step1NextBtn');
+  if (step1Next) step1Next.addEventListener('click', function () { goStep(2); });
+
+  var step2Back = document.getElementById('step2BackBtn');
+  if (step2Back) step2Back.addEventListener('click', function () { goStep(1); });
+
+  var step2Next = document.getElementById('step2NextBtn');
+  if (step2Next) step2Next.addEventListener('click', validateStep2);
+
+  var step3Back = document.getElementById('step3BackBtn');
+  if (step3Back) step3Back.addEventListener('click', function () { goStep(2); });
+
+  var genJson = document.getElementById('generateJsonBtn');
+  if (genJson) genJson.addEventListener('click', generateJson);
+
+  var initBtn = document.getElementById('initiateBtn');
+  if (initBtn) initBtn.addEventListener('click', initiateProject);
+
+  var resetBtn = document.getElementById('resetInitiationBtn');
+  if (resetBtn) resetBtn.addEventListener('click', function () {
+    if (confirm('Reset initiated departments for this client? You can re-initiate them after this.')) {
+      resetInitiation();
+    }
+  });
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { bindEvents(); init(); });
+else { bindEvents(); init(); }
 </script>
 </body>
 </html>

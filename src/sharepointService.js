@@ -1,5 +1,5 @@
 const { SITE_URL, LIST_NAMES, CLIENT_FIELD_CANDIDATES, PROJECT_FIELD_CANDIDATES, MAIN_TRACKER_FIELDS, DEFAULT_STATUS } = require('./config');
-const { graphGet, graphGetAll, graphPost, mapGraphUser } = require('./graphClient');
+const { graphGet, graphGetAll, graphPost, graphPatch, mapGraphUser } = require('./graphClient');
 const metadata = require('./metadata');
 
 function normalizeText(value) {
@@ -389,6 +389,18 @@ async function initiateProject(payload) {
     err.details = result.errors;
     throw err;
   }
+
+  if (result.created.length) {
+    try {
+      const progress = await getClientInitiationProgress(ctx.site.id, listId, payload.client);
+      if (progress && ctx.lists.clients && ctx.lists.clients.id) {
+        await updateClientMasterProgress(ctx.site.id, ctx.lists.clients.id, payload.client, progress.progressText);
+      }
+    } catch (updErr) {
+      console.warn('Failed to update Client Master initiation progress:', updErr);
+    }
+  }
+
   return result;
 }
 
@@ -405,8 +417,64 @@ async function buildBootstrap() {
     site: siteInfo.site,
     lists: siteInfo.lists,
     clients: clients,
-    initiatedDepartmentsByClientId: initiatedDepartmentsByClientId
+    initiatedDepartmentsByKey: initiatedDepartmentsByClientId
   };
+}
+
+async function getClientInitiationProgress(siteId, intakeListId, client) {
+  if (!intakeListId || !client) return null;
+  const items = await graphGetAll('/sites/' + siteId + '/lists/' + intakeListId + '/items?$expand=fields&$top=500');
+  const clientKeys = [
+    String(client.id || ''),
+    String(client.trackingId || ''),
+    String(client.quoteId || ''),
+    String(client.clientName || '')
+  ];
+  const initiated = new Set();
+
+  items.forEach(function (item) {
+    const fields = item.fields || {};
+    const departments = dedupe(splitList(safeField(fields, PROJECT_FIELD_CANDIDATES.departments) || safeField(fields, PROJECT_FIELD_CANDIDATES.department)));
+    if (!departments.length) return;
+    const itemKeys = buildLookupKeys(fields, item.id);
+    const matches = clientKeys.some(function (ck) {
+      if (!ck) return false;
+      return itemKeys.some(function (ik) { return ik === ck; });
+    });
+    if (matches) {
+      departments.forEach(function (d) { initiated.add(d); });
+    }
+  });
+
+  const total = Array.isArray(client.departmentsInvolved) ? client.departmentsInvolved.length : 0;
+  const count = initiated.size;
+  return {
+    initiatedCount: count,
+    totalDepartments: total,
+    progressText: total > 0 && count >= total ? 'Done' : (total > 0 ? count + '/' + total : '')
+  };
+}
+
+async function updateClientMasterProgress(siteId, clientsListId, client, progressText) {
+  if (!clientsListId || !client || !client.id || !progressText) return null;
+  const columns = await getListColumns(siteId, clientsListId);
+  const displayNames = Object.keys(columns.columns);
+  let internalName = null;
+  for (var i = 0; i < displayNames.length; i++) {
+    if (displayNames[i].toLowerCase() === 'initiation progress') {
+      internalName = columns.columns[displayNames[i]];
+      break;
+    }
+  }
+  if (!internalName) {
+    internalName = 'Initiation_x0020_Progress';
+  }
+
+  const res = await graphPatch(
+    '/sites/' + siteId + '/lists/' + clientsListId + '/items/' + client.id,
+    { fields: { [internalName]: progressText } }
+  );
+  return res;
 }
 
 module.exports = {

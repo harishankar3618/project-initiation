@@ -10,7 +10,7 @@
 module.exports = {
   apps: [
     {
-      name: 'pmo-portal',
+      name: 'project-initiation',
       script: './server.js',
       instances: 1,
       exec_mode: 'cluster',
@@ -19,7 +19,7 @@ module.exports = {
       max_memory_restart: '512M',
       env: {
         NODE_ENV: 'production',
-        PORT: 3000
+        PORT: 45821
       },
       error_file: './logs/pm2-error.log',
       out_file: './logs/pm2-out.log',
