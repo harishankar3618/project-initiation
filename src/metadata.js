@@ -148,6 +148,13 @@ var VAPT_ASSESSMENT_TYPES = [
   { name: 'Mobile iOS', assets: ['IPA', 'Bundle ID', 'API', 'Backend URL'] },
   { name: 'Thick Client', assets: ['Installer', 'Version', 'Credentials', 'Backend'] },
   { name: 'Cloud', assets: ['AWS Accounts', 'Azure Subscription', 'GCP Projects'] },
+  { name: 'Source Code Assessment', assets: [] },
+{ name: 'WIFI PT', assets: [] },
+{ name: 'Red Teaming', assets: [] },
+{ name: 'Configuration Review', assets: [] },
+{ name: 'Firewall Configuration Review', assets: [] },
+{ name: 'Network Architecture Review', assets: [] },
+{ name: 'Cloud Configuration Review', assets: [] },
   { name: 'Other', assets: [] }
 ];
 
