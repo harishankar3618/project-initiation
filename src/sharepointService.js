@@ -242,6 +242,37 @@ async function resolvePersonLookupId(person, siteId) {
   return '';
 }
 
+// Normalize any department's scope into one standard shape for the "Scope
+// json" column: a `services` array where each item has a `Service` name and
+// an `assets` array, plus department-specific extras when present.
+function buildStandardScope(dept) {
+  const services = [];
+
+  if (Array.isArray(dept.assessments)) {
+    dept.assessments.forEach(function (a) {
+      services.push({
+        Service: a.assessment,
+        assets: (a.assets || []).map(function (r) { return { label: r.label, count: r.count || 0 }; })
+      });
+    });
+  } else if (Array.isArray(dept.serviceDetails)) {
+    dept.serviceDetails.forEach(function (s) {
+      const item = { Service: s.type, assets: [] };
+      if (s.regulator) item.regulator = s.regulator;
+      if (s.assessmentType) item.assessmentType = s.assessmentType;
+      if (s.mode) item.mode = s.mode;
+      if (s.scope && Object.keys(s.scope).length) item.scope = s.scope;
+      services.push(item);
+    });
+  } else if (Array.isArray(dept.services)) {
+    dept.services.forEach(function (svc) {
+      services.push({ Service: svc, assets: [] });
+    });
+  }
+
+  return services;
+}
+
 async function buildMainTrackerItem(payload, dept, columns, choiceColumns, siteId) {
   const client = payload.client || {};
 
@@ -310,22 +341,40 @@ async function buildMainTrackerItem(payload, dept, columns, choiceColumns, siteI
     fields[internal + 'LookupId'] = id;
   }
 
-  const kind = Array.isArray(dept.assessments) ? 'vapt' : 'project';
+  // Human-readable "Scope" text + the "Services" column string, derived from
+  // the department's natural shape.
   let services = '';
-  let scope = {};
+  let scopeText = '';
 
-  if (kind === 'vapt') {
-    services = (dept.assessments || []).map(function (a) { return a.assessment; }).join('; ');
-    scope = (dept.assessments || []).map(function (a) {
-      const lines = (a.assets || []).map(function (r) { return '  - ' + r.label + ': ' + (r.count || 0); });
-      return a.assessment + ':\n' + lines.join('\n');
-    }).join('\n');
+  if (Array.isArray(dept.assessments)) {
+    services = dept.assessments
+      .map(function (a) { return a.assessment; })
+      .filter(function (v) { return v; })
+      .join('; ');
+    scopeText = dept.assessments
+      .map(function (a) {
+        const lines = (a.assets || []).map(function (r) { return '  - ' + r.label + ': ' + (r.count || 0); });
+        return a.assessment + ':\n' + lines.join('\n');
+      })
+      .join('\n');
+  } else if (Array.isArray(dept.services)) {
+    services = dept.services.join('; ');
+    scopeText = dept.scope || '';
   } else {
-    services = Array.isArray(dept.services)
-      ? dept.services.join('; ')
-      : (dept.projectType || dept.service || '');
-    scope = dept.scope || {};
+    scopeText = dept.scope || '';
   }
+
+  // Standardized, Power-Automate-friendly scope saved to the "Scope json"
+  // column. Every department uses the same shape: a `services` array where
+  // each item has a `Service` name and an `assets` array, plus any
+  // department-specific extras (regulator, assessmentType, mode, scope).
+  const scopeData = {
+    department: departmentName,
+    services: buildStandardScope(dept)
+  };
+
+  // Canonical, machine-readable scope saved to the "Scope json" column.
+  const scopeJson = JSON.stringify(scopeData, null, 2);
 
   const general = dept.general || {};
   const fields = {};
@@ -333,7 +382,9 @@ async function buildMainTrackerItem(payload, dept, columns, choiceColumns, siteI
   setField(fields, 'title', client.name);
   setField(fields, 'department', departmentName);
   setField(fields, 'services', services);
-  setField(fields, 'scope', typeof scope === 'string' ? scope : JSON.stringify(scope));
+  setField(fields, 'scope', scopeText);
+  setField(fields, 'scopeJson', scopeJson);
+  setField(fields, 'industry', client.industry);
   await setPersonField(fields, 'bdPerson', payload.bdPerson);
   setField(fields, 'contactName', client.contact);
   setField(fields, 'contactDesignation', client.designation);

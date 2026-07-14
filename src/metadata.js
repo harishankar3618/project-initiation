@@ -82,81 +82,38 @@ var SOC_PROJECT_TYPES = [
     name: 'SECEON',
     scope: [
       F('Critical Devices', 'criticalDevices', 'number', null, { default: 10 }),
-      F('Log Sources', 'logSources'),
-      F('Collectors', 'collectors', 'number', null, { default: 2 }),
-      F('EPS', 'eps', 'number', null, { default: 5000 }),
-      F('GB', 'gb'),
-      F('Retention', 'retention', null, { default: '180 Days' }),
-      F('SOC Hours', 'socHours')
     ]
   },
   {
     name: 'Securonix',
     scope: [
       F('Critical Devices', 'criticalDevices', 'number'),
-      F('Cloud Sources', 'cloudSources'),
-      F('Collectors', 'collectors', 'number'),
-      F('EPS', 'eps', 'number'),
-      F('Alerts', 'alerts'),
-      F('Playbooks', 'playbooks', 'textarea')
+    ]
+  },
+  {
+    name: 'Gurucul',
+    scope: [
+      F('Critical Devices', 'criticalDevices', 'number'),
     ]
   },
   {
     name: 'Forensic',
     scope: [
-      F('Devices', 'devices', 'number'),
-      F('Disk Images', 'diskImages'),
-      F('Timeline', 'timeline'),
-      F('Evidence', 'evidence', 'textarea'),
-      F('Chain of Custody', 'chainOfCustody', 'textarea')
     ]
   },
   {
     name: 'Email Phishing',
     scope: [
-      F('Users', 'users', 'number'),
-      F('Campaign', 'campaign'),
-      F('Template', 'template'),
-      F('Domains', 'domains'),
-      F('Schedule', 'schedule')
     ]
   },
   { name: 'Product Support', scope: [ F('Product', 'product'), F('Support Scope', 'supportScope', 'textarea'), F('Timeline', 'timeline') ] },
   { name: 'Other', scope: [ F('Custom Scope', 'customScope', 'textarea') ] },
-  { name: 'Decommissioned', scope: [ F('Reason', 'reason', 'textarea'), F('Timeline', 'timeline') ] },
-  {
-    name: 'Gurucul',
-    scope: [
-      F('Critical Devices', 'criticalDevices', 'number'),
-      F('Log Sources', 'logSources'),
-      F('Collectors', 'collectors', 'number'),
-      F('EPS', 'eps', 'number'),
-      F('Use Cases', 'useCases', 'textarea'),
-      F('Risk Scenarios', 'riskScenarios', 'textarea')
-    ]
-  }
+  
 ];
 
-// VAPT assessment types, each preloaded with its common asset types.
-var VAPT_ASSESSMENT_TYPES = [
-  { name: 'Web Application', assets: ['URLs', 'Web Applications', 'Login URLs', 'Test Accounts', 'APIs'] },
-  { name: 'External Network', assets: ['Public IP', 'Public URL', 'Firewall', 'WAF', 'VPN'] },
-  { name: 'Internal Network', assets: ['Internal IP', 'Servers', 'Switches', 'Routers', 'Domain Controllers'] },
-  { name: 'Wireless', assets: ['SSID', 'Access Points', 'Controllers', 'Guest WiFi'] },
-  { name: 'API', assets: ['Base URL', 'Swagger', 'Postman Collection', 'Authentication'] },
-  { name: 'Mobile Android', assets: ['APK', 'Package Name', 'API', 'Backend URL'] },
-  { name: 'Mobile iOS', assets: ['IPA', 'Bundle ID', 'API', 'Backend URL'] },
-  { name: 'Thick Client', assets: ['Installer', 'Version', 'Credentials', 'Backend'] },
-  { name: 'Cloud', assets: ['AWS Accounts', 'Azure Subscription', 'GCP Projects'] },
-  { name: 'Source Code Assessment', assets: [] },
-{ name: 'WIFI PT', assets: [] },
-{ name: 'Red Teaming', assets: [] },
-{ name: 'Configuration Review', assets: [] },
-{ name: 'Firewall Configuration Review', assets: [] },
-{ name: 'Network Architecture Review', assets: [] },
-{ name: 'Cloud Configuration Review', assets: [] },
-  { name: 'Other', assets: [] }
-];
+// VAPT uses fully custom assessments — there are no preset assessment types.
+// When VAPT is selected, the user adds as many named assessments as needed,
+// each with its own asset table (see renderVapt in ProjectInitiationForm.html).
 
 // Training services. Single awareness service; delivery mode is captured
 // separately (no free-form scope builder for Training).
@@ -178,7 +135,7 @@ module.exports = {
   F: F,
   departments: ['VAPT', 'SOC', 'GRC', 'Training'],
   departmentConfig: {
-    VAPT: { key: 'VAPT', label: 'VAPT', kind: 'vapt', assessmentTypes: VAPT_ASSESSMENT_TYPES },
+    VAPT: { key: 'VAPT', label: 'VAPT', kind: 'vapt', assessmentTypes: [] },
     SOC: { key: 'SOC', label: 'SOC', kind: 'soc', projectTypes: SOC_PROJECT_TYPES },
     GRC: {
       key: 'GRC', label: 'GRC / Compliance', kind: 'grc',

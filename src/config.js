@@ -16,7 +16,7 @@ const CLIENT_FIELD_CANDIDATES = {
   quoteId: ['QuoteId', 'QuoteID', 'Quote Id', 'Quote', 'QuoteId'],
   departments: ['DepartmentsInvolved', 'Departments Involved', 'Department', 'Departments'],
   requirement: ['Service_x002f_ProductRequirements', 'Service_x002f_ProductRequirement', 'ServiceProductRequirement', 'Service / Product Requirement', 'Requirement'],
-  industry: ['IndustryType', 'Industry', 'ClientIndustry', 'Sector', 'Industry Type'],
+  industry: ['IndustryType', 'Industry', 'ClientIndustry', 'Sector', 'Industry_x0020_Type'],
   wonDate: ['WONdate', 'WonDate', 'Won Date', 'ClosedWonDate']
 };
 
@@ -45,7 +45,9 @@ const MAIN_TRACKER_FIELDS = {
   initiationDate: 'Initiation Date',
   priority: 'Priority',
   remarks: 'Remarks',
-  status: 'Status'
+  status: 'Status',
+  scopeJson: 'Scope json',
+  industry: 'Industry'
 };
 
 // Default value written to the Main Tracker "Status" choice column on initiate.
