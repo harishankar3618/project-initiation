@@ -75,6 +75,9 @@
 .csif-app .asset-table th { font-size: 0.78rem; font-weight: 600; color: #64748b; text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid #e2e8f0; }
 .csif-app .asset-table td { padding: 0.3rem 0.5rem; vertical-align: middle; }
 .csif-app .asset-table input { padding: 0.35rem 0.5rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.85rem; }
+.csif-app .asset-table textarea { padding: 0.35rem 0.5rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.85rem; width: 100%; min-height: 56px; resize: vertical; font-family: inherit; }
+.csif-app .sow-table th { white-space: nowrap; }
+.csif-app .sow-table .sow-no { font-weight: 600; color: #475569; }
 .csif-app .asset-table .count { width: 90px; }
 .csif-app .asset-table .rem { width: 32px; text-align: center; color: #ef4444; cursor: pointer; font-size: 1.1rem; }
 .csif-app .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
@@ -201,9 +204,29 @@ function emptyDeptState() {
   return {
     collapsed: false,
     general: { pm: null, priority: '', remarks: '' },
-    vapt: { assessments: [] },
+    vapt: { sow: [createEmptySowRow()] },
     services: []   // SOC/GRC/Training: [{ type, mode?, regulator?, assessmentType?, scope?, customTypeName?, customAssessmentType?, customRegulator? }]
   };
+}
+
+// A single empty Scope of Work row. "No." is auto-numbered at render/submit
+// time, so it is not part of the editable data here.
+function createEmptySowRow() {
+  return { no: 0, domainName: '', quantity: '', deliverables: '' };
+}
+
+// Resolve the SOW column definitions for a department (metadata-driven, with a
+// safe built-in fallback so the component still works if metadata is missing).
+function getSowColumns(name) {
+  var cfg = META && META.departmentConfig && META.departmentConfig[name];
+  if (cfg && cfg.sow && Array.isArray(cfg.sow.columns) && cfg.sow.columns.length) return cfg.sow.columns;
+  if (META && Array.isArray(META.vaptSowColumns)) return META.vaptSowColumns;
+  return [
+    { key: 'no', label: 'No.', type: 'auto', readonly: true, autoNumber: true },
+    { key: 'domainName', label: 'Domain Name', type: 'text', required: true },
+    { key: 'quantity', label: 'SOW - Quantity', type: 'textarea', required: true },
+    { key: 'deliverables', label: 'Deliverables', type: 'text', required: true }
+  ];
 }
 
 // =====================================================================
@@ -522,64 +545,85 @@ function renderDepartmentCards() {
 function deptBadge(name) {
   var ds = state.depts[name];
   if (META.departmentConfig[name] && META.departmentConfig[name].kind === 'vapt') {
-    var n = 0; (ds.vapt.assessments || []).forEach(function (a) { n += (a.assets || []).length; });
-    return n + ' asset' + (n === 1 ? '' : 's');
+    var n = (ds.vapt.sow || []).length;
+    return n + ' SOW row' + (n === 1 ? '' : 's');
   }
   var count = (ds.services || []).length;
   return count + ' service' + (count === 1 ? '' : 's');
 }
 
-// ---- VAPT ----
-// No preset assessment types — the user adds as many named assessments as
-// needed. Each assessment is one sub-card with an asset table.
+// ---- VAPT Scope of Work (SOW) ----
+// VAPT captures scope as a structured table. There are no preset assessments —
+// the user adds as many rows as needed, each a scope of work. See renderSowTable
+// for the reusable, metadata-driven Dynamic SOW Table component.
 function renderVapt(name) {
   var ds = state.depts[name];
-  if (!ds.vapt.assessments) ds.vapt.assessments = [];
-  var wrap = el('div');
-  wrap.appendChild(el('div', { class: 'section-label', text: 'Assessments', style: 'margin-top:0;' }));
-  wrap.appendChild(el('div', { class: 'hint', text: 'Add the assessments to be performed for this engagement.' }));
-  if (!ds.vapt.assessments.length) {
-    wrap.appendChild(el('p', { class: 'empty-hint', text: 'No assessments added yet.' }));
-  }
-  ds.vapt.assessments.forEach(function (a, ai) {
-    var sub = el('div', { class: 'sub-card' });
-    sub.appendChild(el('div', { class: 'sub-card-head' }, [
-      el('strong', {}, a.name || ('Assessment ' + (ai + 1))),
-      el('span', { class: 'rem', text: '×', onclick: function () { ds.vapt.assessments.splice(ai, 1); renderDepartmentCards(); } })
-    ]));
-    sub.appendChild(el('div', { class: 'form-group' }, [
-      el('label', { text: 'Assessment name' }),
-      el('input', { type: 'text', value: a.name || '', placeholder: 'e.g. Internal Infrastructure VAPT', oninput: function (e) { a.name = e.target.value; } })
-    ]));
-    sub.appendChild(renderAssetTable(null, a.assets));
-    wrap.appendChild(sub);
-  });
-  wrap.appendChild(el('button', { class: 'btn-add-other', text: '+ Add assessment', onclick: function () {
-    ds.vapt.assessments.push({ name: '', assets: [] }); renderDepartmentCards();
-  } }));
-  return wrap;
+  if (!ds.vapt.sow || !ds.vapt.sow.length) ds.vapt.sow = [createEmptySowRow()];
+  return renderSowTable(getSowColumns(name), ds.vapt.sow);
 }
 
-// Reusable asset table bound to a mutable `assets` array. Mutations re-render
-// the whole card tree (assets are only edited on blur/click, so focus loss is
-// not an issue here, unlike inline "Other" textboxes).
-function renderAssetTable(title, assets) {
+// Reusable Dynamic SOW Table component.
+//
+// Bound to a mutable `rows` array. Each column is rendered per the supplied
+// column definitions (metadata-driven). Auto-numbered columns ("no") are
+// read-only and recomputed from the row index on every render. Textarea
+// columns preserve user-entered line breaks exactly. Single-clicks on the
+// delete glyph remove a row (a fresh empty row is kept if the table would
+// otherwise become empty), and "+ Add SOW row" appends unlimited rows.
+//
+// Mutations re-render the whole card tree, so focus loss is only an issue on
+// add/delete — which are deliberate click actions. Inline edits write straight
+// into the row object without re-rendering.
+function renderSowTable(columnDefs, rows) {
   var box = el('div');
-  if (title) box.appendChild(el('div', { class: 'section-label', text: title }));
-  var table = el('table', { class: 'asset-table' });
-  table.appendChild(el('thead', {}, el('tr', {}, [el('th', { text: 'Asset Type' }), el('th', { text: 'Count' }), el('th', { text: '' })])));
+  box.appendChild(el('div', { class: 'section-label', text: 'Scope of Work (SOW)', style: 'margin-top:0;' }));
+  box.appendChild(el('div', { class: 'hint', text: 'Add one row per scope of work. "No." auto-numbers. Quantity may span multiple lines.' }));
+  var table = el('table', { class: 'asset-table sow-table' });
+  var thead = el('thead');
+  var headRow = el('tr');
+  columnDefs.forEach(function (col) {
+    headRow.appendChild(el('th', { text: col.label, style: col.type === 'auto' ? 'width:40px;white-space:nowrap;' : '' }));
+  });
+  headRow.appendChild(el('th', { text: '', style: 'width:32px;' }));
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+
   var tbody = el('tbody');
-  assets.forEach(function (row, idx) {
-    tbody.appendChild(el('tr', {}, [
-      el('td', {}, el('input', { type: 'text', value: row.label, oninput: function (e) { row.label = e.target.value; } })),
-      el('td', {}, el('input', { type: 'number', class: 'count', min: '0', value: row.count, oninput: function (e) { row.count = parseInt(e.target.value, 10) || 0; } })),
-      el('td', { class: 'rem', text: '×', onclick: function () { assets.splice(idx, 1); renderDepartmentCards(); } })
-    ]));
+  rows.forEach(function (row, idx) {
+    row.no = idx + 1; // keep stored "No." in sync with its position.
+    var tr = el('tr');
+    columnDefs.forEach(function (col) {
+      var td = el('td');
+      if (col.type === 'auto') {
+        // Read-only, auto-generated sequence number.
+        td.appendChild(el('span', { class: 'sow-no', text: String(idx + 1) }));
+      } else if (col.type === 'textarea') {
+        var ta = el('textarea', {
+          placeholder: col.placeholder || '',
+          oninput: function (e) { row[col.key] = e.target.value; }
+        }, row[col.key] || '');
+        td.appendChild(ta);
+      } else {
+        td.appendChild(el('input', {
+          type: 'text',
+          placeholder: col.placeholder || '',
+          value: row[col.key] || '',
+          oninput: function (e) { row[col.key] = e.target.value; }
+        }));
+      }
+      tr.appendChild(td);
+    });
+    tr.appendChild(el('td', { class: 'rem', text: '×', onclick: function () {
+      rows.splice(idx, 1);
+      if (rows.length === 0) rows.push(createEmptySowRow()); // minimum one row
+      renderDepartmentCards();
+    } }));
+    tbody.appendChild(tr);
   });
   table.appendChild(tbody);
   box.appendChild(table);
-  box.appendChild(el('button', { class: 'btn-add-other', text: '+ Add asset row', onclick: function () {
-    assets.push({ label: '', count: 0 }); renderDepartmentCards();
+  box.appendChild(el('button', { class: 'btn-add-other', text: '+ Add SOW row', onclick: function () {
+    rows.push(createEmptySowRow()); renderDepartmentCards();
   } }));
   return box;
 }
@@ -861,15 +905,13 @@ function validateStep2() {
     var ds = state.depts[name];
     var kind = META.departmentConfig[name].kind;
   if (kind === 'vapt') {
-        if (!ds.vapt.assessments.length) { alert('Add at least one assessment for: ' + name); return; }
-        for (var a = 0; a < ds.vapt.assessments.length; a++) {
-          var aObj = ds.vapt.assessments[a];
-          if (!aObj.name || !aObj.name.trim()) { alert('Please specify the assessment name for Assessment ' + (a + 1) + ' in: ' + name); return; }
-          var rows = aObj.assets || [];
-          var total = 0, missingName = false;
-          rows.forEach(function (r) { total += r.count || 0; if (!String(r.label).trim()) missingName = true; });
-          if (total === 0) { alert('Enter at least one asset count for assessment "' + aObj.name + '" in: ' + name); return; }
-          if (missingName) { alert('Name all asset rows for assessment "' + aObj.name + '" in: ' + name); return; }
+        var sowRows = ds.vapt.sow || [];
+        if (!sowRows.length) { alert('Add at least one Scope of Work row for: ' + name); return; }
+        for (var r = 0; r < sowRows.length; r += 1) {
+          var rowObj = sowRows[r];
+          if (!rowObj.domainName || !rowObj.domainName.trim()) { alert('Domain Name is required for SOW row ' + (r + 1) + ' in: ' + name); return; }
+          if (!rowObj.quantity || !rowObj.quantity.trim()) { alert('SOW - Quantity is required for SOW row ' + (r + 1) + ' in: ' + name); return; }
+          if (!rowObj.deliverables || !rowObj.deliverables.trim()) { alert('Deliverables is required for SOW row ' + (r + 1) + ' in: ' + name); return; }
         }
       } else {
 if (kind === 'training') {
@@ -965,16 +1007,11 @@ function renderReview() {
       var ds = state.depts[name];
       var kind = META.departmentConfig[name].kind;
         if (kind === 'vapt') {
-         (ds.vapt.assessments || []).forEach(function (a, si) {
-               if (!a.name) return;
-               var lastS = si === (ds.vapt.assessments.length - 1);
-               html += '<div>' + dPipe + (lastS ? '└── ' : '├── ') + '<span style="color:#0f766e;">' + escapeHtml(a.name) + '</span></div>';
-               (a.assets || []).forEach(function (r, ri) {
-                 var lastR = ri === (a.assets.length - 1);
-                 html += '<div>' + dPipe + (lastS ? '    ' : '│   ') + (lastR ? '└── ' : '├── ') + escapeHtml(r.label || 'unnamed') + ': <span style="color:#475569;">' + (r.count || 0) + '</span></div>';
-               });
-             });
-        } else {
+          var sowCols = getSowColumns(name);
+          var sowRows = ds.vapt.sow || [];
+          html += '<div>' + dPipe + '└── <span style="color:#0f766e;">Scope of Work</span></div>';
+          html += sowTableHtml(sowCols, sowRows);
+         } else {
         if (kind === 'training') {
           var t0 = ds.services[0] || {};
           html += '<div>' + dPipe + '└── <span style="color:#0f766e;">' + escapeHtml(t0.type || '—') + '</span>' +
@@ -1023,6 +1060,30 @@ function renderReview() {
   document.getElementById('reviewContent').innerHTML = html;
 }
 
+// Render the SOW table as a read-only HTML table for the Review step. Headers
+// come from the (metadata-driven) column definitions; line breaks inside
+// textarea columns (quantity) are preserved via white-space:pre-wrap.
+function sowTableHtml(columnDefs, rows) {
+  var html = '<table class="sow-review-table" style="border-collapse:collapse;width:100%;margin:0.4rem 0 0.6rem;font-size:0.8rem;">';
+  html += '<thead><tr>';
+  columnDefs.forEach(function (col) {
+    html += '<th style="border:1px solid #cbd5e1;padding:4px 8px;background:#f1f5f9;text-align:left;white-space:nowrap;">' + escapeHtml(col.label) + '</th>';
+  });
+  html += '</tr></thead><tbody>';
+  (rows || []).forEach(function (rowObj, i) {
+    html += '<tr>';
+    columnDefs.forEach(function (col) {
+      var val = col.type === 'auto' ? String(i + 1) : (rowObj[col.key] || '');
+      var style = 'border:1px solid #cbd5e1;padding:4px 8px;vertical-align:top;';
+      if (col.type === 'textarea') style += 'white-space:pre-wrap;';
+      html += '<td style="' + style + '">' + escapeHtml(val) + '</td>';
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  return html;
+}
+
 function row(label, value) {
   return '<div class="row"><span class="label">' + escapeHtml(label) + '</span><strong>' + escapeHtml(value || '—') + '</strong></div>';
 }
@@ -1058,16 +1119,26 @@ function buildPayload() {
     var ds = state.depts[name];
     var kind = META.departmentConfig[name].kind;
     var dept = { department: normalizeDeptName(name) };
- if (kind === 'vapt') {
-        var assessments = (ds.vapt.assessments || []).map(function (a) {
-          return { assessment: a.name, assets: (a.assets || []).map(function (r) { return { label: r.label, count: r.count || 0 }; }) };
+  if (kind === 'vapt') {
+        // Structured Scope of Work table, ready for Power Automate's
+        // Parse JSON → Select → Create HTML Table workflow. Each row keeps the
+        // quantity exactly as typed (including newlines) — no HTML conversion,
+        // no flattening, no row concatenation.
+        var sow = (ds.vapt.sow || []).map(function (rowObj, i) {
+          return {
+            no: i + 1,
+            domainName: rowObj.domainName || '',
+            quantity: rowObj.quantity || '',
+            deliverables: rowObj.deliverables || ''
+          };
         });
-        dept.assessments = assessments;
-        // Clean, readable text scope (no nested JSON) for SharePoint/email.
-        dept.scope = assessments.map(function (a) {
-          var lines = (a.assets || []).map(function (r) { return '  - ' + r.label + ': ' + (r.count || 0); });
-          return a.assessment + ':\n' + lines.join('\n');
-        }).join('\n');
+        dept.sow = sow;
+        // Stored verbatim in the existing "Scope json" SharePoint column.
+        dept.scopeJson = JSON.stringify(sow);
+        // Human-readable scope text for the legacy "Scope" column.
+        dept.scope = sow.map(function (r) {
+          return r.domainName + ':\n' + r.quantity + '\nDeliverables: ' + r.deliverables;
+        }).join('\n\n');
       } else if (kind === 'grc') {
        dept.services = ds.services.map(function (s) {
          return (s.type === 'Other' && s.customTypeName) ? s.customTypeName : s.type;

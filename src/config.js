@@ -16,7 +16,7 @@ const CLIENT_FIELD_CANDIDATES = {
   quoteId: ['QuoteId', 'QuoteID', 'Quote Id', 'Quote', 'QuoteId'],
   departments: ['DepartmentsInvolved', 'Departments Involved', 'Department', 'Departments'],
   requirement: ['Service_x002f_ProductRequirements', 'Service_x002f_ProductRequirement', 'ServiceProductRequirement', 'Service / Product Requirement', 'Requirement'],
-  industry: ['IndustryType', 'Industry', 'ClientIndustry', 'Sector', 'Industry_x0020_Type'],
+  industry: ['Industry_x0020_type', 'Industry_x0020_Type', 'IndustryType', 'Industry', 'ClientIndustry', 'Sector'],
   wonDate: ['WONdate', 'WonDate', 'Won Date', 'ClosedWonDate']
 };
 

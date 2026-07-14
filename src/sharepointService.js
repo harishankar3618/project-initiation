@@ -364,17 +364,20 @@ async function buildMainTrackerItem(payload, dept, columns, choiceColumns, siteI
     scopeText = dept.scope || '';
   }
 
-  // Standardized, Power-Automate-friendly scope saved to the "Scope json"
-  // column. Every department uses the same shape: a `services` array where
-  // each item has a `Service` name and an `assets` array, plus any
-  // department-specific extras (regulator, assessmentType, mode, scope).
-  const scopeData = {
-    department: departmentName,
-    services: buildStandardScope(dept)
-  };
-
   // Canonical, machine-readable scope saved to the "Scope json" column.
-  const scopeJson = JSON.stringify(scopeData, null, 2);
+  // VAPT sends a pre-built scopeJson (the SOW table array string) directly
+  // from the form; every other department uses the standardized services
+  // shape. This keeps the backend API contract unchanged.
+  let scopeJson;
+  if (typeof dept.scopeJson === 'string' && dept.scopeJson) {
+    scopeJson = dept.scopeJson;
+  } else {
+    const scopeData = {
+      department: departmentName,
+      services: buildStandardScope(dept)
+    };
+    scopeJson = JSON.stringify(scopeData, null, 2);
+  }
 
   const general = dept.general || {};
   const fields = {};

@@ -111,9 +111,30 @@ var SOC_PROJECT_TYPES = [
   
 ];
 
-// VAPT uses fully custom assessments — there are no preset assessment types.
-// When VAPT is selected, the user adds as many named assessments as needed,
-// each with its own asset table (see renderVapt in ProjectInitiationForm.html).
+// VAPT Scope of Work (SOW) table.
+//
+// The VAPT department captures scope as a structured table (one row per scope
+// of work). The column definitions below drive the reusable Dynamic SOW Table
+// component, so the table is metadata-driven and easy to extend later.
+//
+// Column semantics:
+//   no           — read-only, auto-numbered (1..N) at render & submit time.
+//   domainName   — free text (never a fixed option list) so custom assessments
+//                  are supported out of the box.
+//   quantity     — textarea so a single row can hold multiple quantities
+//                  (e.g. "Server - 10\nEndpoint - 10\nFirewall - 10"). Newlines
+//                  are preserved exactly as typed.
+//   deliverables — free text summary of what is delivered.
+//
+// Every column except "no" is required. Validation lives in the form and is
+// enforced before submit, matching the Power Automate Parse JSON → Select →
+// Create HTML Table workflow that consumes the resulting array of rows.
+var VAPT_SOW_COLUMNS = [
+  { key: 'no', label: 'No.', type: 'auto', readonly: true, autoNumber: true },
+  { key: 'domainName', label: 'Domain Name', type: 'text', required: true, placeholder: 'e.g. Internal Network VAPT' },
+  { key: 'quantity', label: 'SOW - Quantity', type: 'textarea', required: true, placeholder: 'Server - 10\nEndpoint - 10\nFirewall - 10', preserveNewlines: true },
+  { key: 'deliverables', label: 'Deliverables', type: 'text', required: true, placeholder: 'e.g. Internal Network VAPT Report' }
+];
 
 // Training services. Single awareness service; delivery mode is captured
 // separately (no free-form scope builder for Training).
@@ -134,8 +155,9 @@ var DEPARTMENT_GENERAL = [
 module.exports = {
   F: F,
   departments: ['VAPT', 'SOC', 'GRC', 'Training'],
+  vaptSowColumns: VAPT_SOW_COLUMNS,
   departmentConfig: {
-    VAPT: { key: 'VAPT', label: 'VAPT', kind: 'vapt', assessmentTypes: [] },
+    VAPT: { key: 'VAPT', label: 'VAPT', kind: 'vapt', assessmentTypes: [], sow: { columns: VAPT_SOW_COLUMNS } },
     SOC: { key: 'SOC', label: 'SOC', kind: 'soc', projectTypes: SOC_PROJECT_TYPES },
     GRC: {
       key: 'GRC', label: 'GRC / Compliance', kind: 'grc',
