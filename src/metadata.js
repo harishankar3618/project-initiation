@@ -139,7 +139,7 @@ var VAPT_SOW_COLUMNS = [
 // Training services. Single awareness service; delivery mode is captured
 // separately (no free-form scope builder for Training).
 var TRAINING_SERVICES = [
-  { name: 'Cyber Security Awareness Training', mode: ['Online', 'Offline', 'Hybrid'] },
+  { name: 'Cyber Security Awareness Training', mode: ['Virtual', 'Physical']},
   { name: 'Custom', mode: null }
 ];
 
