@@ -47,7 +47,8 @@ const MAIN_TRACKER_FIELDS = {
   remarks: 'Remarks',
   status: 'Status',
   scopeJson: 'Scope json',
-  industry: 'Industry'
+  industry: 'Industry',
+  projectType: 'Project Type'
 };
 
 // Default value written to the Main Tracker "Status" choice column on initiate.

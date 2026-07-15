@@ -152,6 +152,8 @@ var DEPARTMENT_GENERAL = [
   F('Remarks', 'remarks', 'textarea')
 ];
 
+var VAPT_PROJECT_TYPES = ['SEBI', 'IFSCA', 'Enterprise', 'Bank & RBI', 'International', 'White-label', 'Government'];
+
 module.exports = {
   F: F,
   departments: ['VAPT', 'SOC', 'GRC', 'Training'],
@@ -172,5 +174,6 @@ module.exports = {
   grcAuditTypes: GRC_AUDIT_TYPES,
   grcAssessmentTypes: GRC_ASSESSMENT_TYPES,
   grcRegulators: GRC_REGULATORS,
-  departmentAliases: { Compliance: 'GRC' }
+  departmentAliases: { Compliance: 'GRC' },
+  vaptProjectTypes: VAPT_PROJECT_TYPES
 };

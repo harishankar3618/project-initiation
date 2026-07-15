@@ -204,7 +204,7 @@ function emptyDeptState() {
   return {
     collapsed: false,
     general: { pm: null, priority: '', remarks: '' },
-    vapt: { sow: [createEmptySowRow()] },
+    vapt: { projectType: '', sow: [createEmptySowRow()] },
     services: []   // SOC/GRC/Training: [{ type, mode?, regulator?, assessmentType?, scope?, customTypeName?, customAssessmentType?, customRegulator? }]
   };
 }
@@ -559,7 +559,10 @@ function deptBadge(name) {
 function renderVapt(name) {
   var ds = state.depts[name];
   if (!ds.vapt.sow || !ds.vapt.sow.length) ds.vapt.sow = [createEmptySowRow()];
-  return renderSowTable(getSowColumns(name), ds.vapt.sow);
+  var wrap = el('div');
+  wrap.appendChild(renderSelectField('Project Type', META.vaptProjectTypes, ds.vapt.projectType, function (v) { ds.vapt.projectType = v; }));
+  wrap.appendChild(renderSowTable(getSowColumns(name), ds.vapt.sow));
+  return wrap;
 }
 
 // Reusable Dynamic SOW Table component.
@@ -913,6 +916,7 @@ function validateStep2() {
           if (!rowObj.quantity || !rowObj.quantity.trim()) { alert('SOW - Quantity is required for SOW row ' + (r + 1) + ' in: ' + name); return; }
           if (!rowObj.deliverables || !rowObj.deliverables.trim()) { alert('Deliverables is required for SOW row ' + (r + 1) + ' in: ' + name); return; }
         }
+        if (!ds.vapt.projectType) { alert('Select a Project Type for: ' + name); return; }
       } else {
 if (kind === 'training') {
            if (!ds.services.length || !ds.services[0].type) { alert('Select a Service for: ' + name); return; }
@@ -953,8 +957,8 @@ for (var si2 = 0; si2 < ds.services.length; si2 += 1) {
                        alert('Please specify the Other assessment type for ' + name);
                        return;
                    }
-               }
-             } else {
+                }
+       } else {
                // soc
                if (svc.type === 'Other') {
                    var customTypeName = svc.customTypeName || '';
@@ -1009,6 +1013,8 @@ function renderReview() {
         if (kind === 'vapt') {
           var sowCols = getSowColumns(name);
           var sowRows = ds.vapt.sow || [];
+          var pt = ds.vapt.projectType || '';
+          if (pt) html += '<div>' + dPipe + '├── <span style="color:#0f766e;">Project Type: ' + escapeHtml(pt) + '</span></div>';
           html += '<div>' + dPipe + '└── <span style="color:#0f766e;">Scope of Work</span></div>';
           html += sowTableHtml(sowCols, sowRows);
          } else {
@@ -1139,6 +1145,7 @@ function buildPayload() {
         dept.scope = sow.map(function (r) {
           return r.domainName + ':\n' + r.quantity + '\nDeliverables: ' + r.deliverables;
         }).join('\n\n');
+        dept.projectType = ds.vapt.projectType || '';
       } else if (kind === 'grc') {
        dept.services = ds.services.map(function (s) {
          return (s.type === 'Other' && s.customTypeName) ? s.customTypeName : s.type;
