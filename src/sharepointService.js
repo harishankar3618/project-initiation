@@ -34,23 +34,23 @@ function dedupe(values) {
   return Array.from(new Set(values.filter(Boolean)));
 }
 
-function parseClientItem(fields, itemId) {
+function parseClientItem(fields, itemId, columnMap) {
   return {
     id: String(itemId),
-    clientName: normalizeText(safeField(fields, CLIENT_FIELD_CANDIDATES.name)),
-    contactPerson: normalizeText(safeField(fields, CLIENT_FIELD_CANDIDATES.contactPerson)),
-    designation: normalizeText(safeField(fields, CLIENT_FIELD_CANDIDATES.contactDesignation)),
-    phone: normalizeText(safeField(fields, CLIENT_FIELD_CANDIDATES.contactNumber)),
-    email: normalizeText(safeField(fields, CLIENT_FIELD_CANDIDATES.contactEmail)),
-    bdPersonLookupId: normalizeText(safeField(fields, ['BDPersonLookupId'])),
-    bdPersonName: normalizeText(safeField(fields, ['BDPerson'])),
+    clientName: normalizeText(safeField(fields, resolveCandidates(CLIENT_FIELD_CANDIDATES.name, columnMap))),
+    contactPerson: normalizeText(safeField(fields, resolveCandidates(CLIENT_FIELD_CANDIDATES.contactPerson, columnMap))),
+    designation: normalizeText(safeField(fields, resolveCandidates(CLIENT_FIELD_CANDIDATES.contactDesignation, columnMap))),
+    phone: normalizeText(safeField(fields, resolveCandidates(CLIENT_FIELD_CANDIDATES.contactNumber, columnMap))),
+    email: normalizeText(safeField(fields, resolveCandidates(CLIENT_FIELD_CANDIDATES.contactEmail, columnMap))),
+    bdPersonLookupId: normalizeText(safeField(fields, resolveCandidates(['BDPersonLookupId'], columnMap))),
+    bdPersonName: normalizeText(safeField(fields, resolveCandidates(['BDPerson'], columnMap))),
     bdPerson: null,
-    trackingId: normalizeText(safeField(fields, CLIENT_FIELD_CANDIDATES.trackingId)),
-    quoteId: normalizeText(safeField(fields, CLIENT_FIELD_CANDIDATES.quoteId)),
-    departmentsInvolved: splitList(safeField(fields, CLIENT_FIELD_CANDIDATES.departments)),
-    requirement: normalizeText(safeField(fields, CLIENT_FIELD_CANDIDATES.requirement)),
-    industry: normalizeText(safeField(fields, CLIENT_FIELD_CANDIDATES.industry)),
-    wonDate: normalizeText(safeField(fields, CLIENT_FIELD_CANDIDATES.wonDate))
+    trackingId: normalizeText(safeField(fields, resolveCandidates(CLIENT_FIELD_CANDIDATES.trackingId, columnMap))),
+    quoteId: normalizeText(safeField(fields, resolveCandidates(CLIENT_FIELD_CANDIDATES.quoteId, columnMap))),
+    departmentsInvolved: splitList(safeField(fields, resolveCandidates(CLIENT_FIELD_CANDIDATES.departments, columnMap))),
+    requirement: normalizeText(safeField(fields, resolveCandidates(CLIENT_FIELD_CANDIDATES.requirement, columnMap))),
+    industry: normalizeText(safeField(fields, resolveCandidates(CLIENT_FIELD_CANDIDATES.industry, columnMap))),
+    wonDate: normalizeText(safeField(fields, resolveCandidates(CLIENT_FIELD_CANDIDATES.wonDate, columnMap)))
   };
 }
 
@@ -118,10 +118,13 @@ async function resolveSiteAndLists() {
   };
 }
 
-function buildClientSelect() {
+function buildClientSelect(columnMap) {
   const names = new Set(['id', 'Title', 'LinkTitle']);
   Object.keys(CLIENT_FIELD_CANDIDATES).forEach(function (group) {
     CLIENT_FIELD_CANDIDATES[group].forEach(function (name) {
+      // If this candidate is a known display name, select its real internal
+      // name (e.g. "Industry type" -> "IndustryType"/"Industry_x0020_type").
+      if (columnMap && columnMap[name]) { names.add(columnMap[name]); return; }
       if (name && !/\s/.test(name)) names.add(name);
     });
   });
@@ -130,11 +133,13 @@ function buildClientSelect() {
 
 async function loadClients(siteId, listId) {
   if (!listId) return [];
-  const select = buildClientSelect();
+  const columnInfo = await getClientColumns();
+  const columnMap = columnInfo.columns || {};
+  const select = buildClientSelect(columnMap);
   const items = await graphGetAll('/sites/' + siteId + '/lists/' + listId + '/items?$expand=fields($select=' + select + ')&$top=200');
 
   const parsed = items.map(function (item) {
-    return parseClientItem(item.fields || {}, item.id);
+    return parseClientItem(item.fields || {}, item.id, columnMap);
   });
 
   await Promise.all(parsed.map(async function (c) {
@@ -211,6 +216,24 @@ async function getIntakeColumns() {
   const listId = ctx.lists.intake && ctx.lists.intake.id;
   cachedIntakeColumns = await getListColumns(ctx.site.id, listId);
   return cachedIntakeColumns;
+}
+
+let cachedClientColumns = null;
+async function getClientColumns() {
+  if (cachedClientColumns) return cachedClientColumns;
+  const ctx = await getSiteContext();
+  const listId = ctx.lists.clients && ctx.lists.clients.id;
+  cachedClientColumns = await getListColumns(ctx.site.id, listId);
+  return cachedClientColumns;
+}
+
+// Map a list of candidate names (which may be display names like "Industry
+// type" or internal names like "IndustryType") to the list's actual internal
+// names. Display names are resolved via the column map; unknown entries are
+// passed through unchanged so existing hardcoded internal names keep working.
+function resolveCandidates(candidates, columnMap) {
+  if (!columnMap) return candidates;
+  return candidates.map(function (c) { return columnMap[c] || c; });
 }
 
 const sharePointUserCache = {};
