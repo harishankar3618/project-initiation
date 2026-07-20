@@ -397,6 +397,8 @@ function onClientChange() {
   if (window.__bdPicker) window.__bdPicker.set(BD_PERSON);
   applyClientDepartments();
   updateInitiationProgress();
+  // Re-enable the Initiate button for a newly selected (or reset) client.
+  resetInitiateButton();
 }
 
 function normalizeDeptName(name) {
@@ -1206,11 +1208,26 @@ function generateJson() {
   });
 }
 
+// Re-entry guard so the button cannot be clicked twice while a request is in
+// flight. The guard is only cleared when the user switches to a different
+// client or clicks Reset (see onClientChange / resetInitiation), so a
+// successfully-initiated client cannot be re-initiated by repeated clicks.
+var initiationInFlight = false;
+
+// Re-enable the Initiate button (used only when switching client / reset).
+function resetInitiateButton() {
+  initiationInFlight = false;
+  var btn = document.getElementById('initiateBtn');
+  if (btn) { btn.disabled = false; btn.textContent = '🚀 Initiate'; }
+}
+
 // Post the generated payload to /api/initiate, which creates one Main
 // Tracker item per department. Falls back to showing the JSON on failure.
 async function initiateProject() {
+  if (initiationInFlight) return;
   var payload = buildPayload();
   var btn = document.getElementById('initiateBtn');
+  initiationInFlight = true;
   if (btn) { btn.disabled = true; btn.textContent = 'Initiating…'; }
   var elOut = document.getElementById('json-output');
   try {
@@ -1239,12 +1256,23 @@ async function initiateProject() {
       syncDepartmentAvailability();
       renderDepartmentCards();
     }
+    // Once every available department is initiated, leave the button disabled
+    // (marked "Fully Initiated") so the client cannot be re-initiated here.
+    if (state.selectedClient && getInitiatedDepartmentsForClient(state.selectedClient).length >= getAvailableDepartments().length) {
+      if (btn) { btn.disabled = true; btn.textContent = '✓ Fully Initiated'; }
+    } else {
+      // Partial success / skipped: stay disabled with a hint that you can
+      // re-initiate remaining departments. The guard keeps a double-click from
+      // firing a second request until the user interacts (resets / switches).
+      if (btn) { btn.disabled = true; btn.textContent = '✓ Initiated — switch client or Reset to initiate more'; }
+    }
   } catch (err) {
+    // Network/request failure: re-enable so the user can retry once.
+    if (btn) { btn.disabled = false; btn.textContent = '🚀 Initiate'; }
+    initiationInFlight = false;
     elOut.innerHTML = '<div class="json-actions" style="color:#ef4444;font-weight:700;">⚠ Could not reach server — showing JSON payload</div>' +
       '<div id="jsonText" style="white-space:pre-wrap;">' + escapeHtml(JSON.stringify(payload, null, 2)) + '</div>';
     elOut.classList.add('visible');
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '🚀 Initiate'; }
   }
 }
 
@@ -1286,6 +1314,7 @@ function resetInitiation() {
   updateInitiationProgress();
   syncDepartmentAvailability();
   renderDepartmentCards();
+  resetInitiateButton();
 }
 
 function updateLocalInitiatedState(client, departments) {

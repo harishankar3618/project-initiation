@@ -55,11 +55,24 @@ const MAIN_TRACKER_FIELDS = {
 // Must exist as a choice (or the column must allow fill-in choices).
 const DEFAULT_STATUS = 'Initiated';
 
+// Client Master "Initiation Status" drive values. These are written to the
+// client's "Initiation Status" column (single line of text) so the status
+// reflects progress without manual edits:
+//   - NOT_STARTED when nothing has been initiated
+//   - IN_PROGRESS when at least one but not all departments are initiated
+//   - DONE when every department involved has been initiated
+const CLIENT_INITIATION_STATUS = {
+  NOT_STARTED: 'Not Started',
+  IN_PROGRESS: 'In Progress',
+  DONE: 'Done'
+};
+
 module.exports = {
   SITE_URL,
   LIST_NAMES,
   CLIENT_FIELD_CANDIDATES,
   PROJECT_FIELD_CANDIDATES,
   MAIN_TRACKER_FIELDS,
-  DEFAULT_STATUS
+  DEFAULT_STATUS,
+  CLIENT_INITIATION_STATUS
 };

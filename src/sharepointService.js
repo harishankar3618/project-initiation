@@ -1,4 +1,4 @@
-const { SITE_URL, LIST_NAMES, CLIENT_FIELD_CANDIDATES, PROJECT_FIELD_CANDIDATES, MAIN_TRACKER_FIELDS, DEFAULT_STATUS } = require('./config');
+const { SITE_URL, LIST_NAMES, CLIENT_FIELD_CANDIDATES, PROJECT_FIELD_CANDIDATES, MAIN_TRACKER_FIELDS, DEFAULT_STATUS, CLIENT_INITIATION_STATUS } = require('./config');
 const { graphGet, graphGetAll, graphPost, graphPatch, mapGraphUser } = require('./graphClient');
 const metadata = require('./metadata');
 
@@ -180,6 +180,41 @@ async function getSiteContext() {
   return cachedContext;
 }
 
+// Per-client in-memory lock so concurrent /api/initiate clicks for the same
+// client cannot each pass the "already initiated?" check and create duplicate
+// Main Tracker items. The key is the client id (falling back to trackingId /
+// quoteId / client name so it still works when id is missing).
+const initiationLocks = new Map();
+
+function clientLockKey(client) {
+  return [
+    String(client && client.id || ''),
+    String(client && client.trackingId || ''),
+    String(client && client.quoteId || ''),
+    String(client && client.clientName || '')
+  ].filter(Boolean).join('|');
+}
+
+async function withClientLock(client, fn) {
+  const key = clientLockKey(client);
+  const existing = initiationLocks.get(key);
+  if (existing) {
+    // Another initiation for this client is in flight — wait for it, then run
+    // fn as a re-entrant pass that will skip anything already created.
+    await existing;
+    return fn();
+  }
+  const promise = (async function () {
+    try {
+      return await fn();
+    } finally {
+      initiationLocks.delete(key);
+    }
+  })();
+  initiationLocks.set(key, promise);
+  return promise;
+}
+
 const SYSTEM_COLUMN_NAMES = new Set([
   'LinkTitle', 'LinkTitleNoMenu', 'Edit', 'Attachments', 'Created', 'Modified',
   'Author', 'Editor', 'ContentType', 'ID', 'GUID', 'AppAuthor', 'AppEditor',
@@ -199,8 +234,11 @@ async function getListColumns(siteId, listId) {
   const choices = {};
   columns.forEach(function (col) {
     if (!col.displayName || !col.name) return;
-    if (col.readOnly) return;
     if (SYSTEM_COLUMN_NAMES.has(col.name)) return;
+    // Include every editable + read-only column in the name map so we can
+    // resolve the real internal name for write targets (e.g. "Initiation
+    // Status" may be reported readOnly by Graph yet still be PATCH-able, and
+    // its internal name is NOT the naive "Initiation_x0020_Status").
     if (map[col.displayName] === undefined) map[col.displayName] = col.name;
     if (col.choice && Array.isArray(col.choice.choices) && col.choice.choices.length && choices[col.displayName] === undefined) {
       choices[col.displayName] = col.choice.choices;
@@ -433,53 +471,83 @@ async function buildMainTrackerItem(payload, dept, columns, choiceColumns, siteI
   return { fields: fields, warnings: warnings };
 }
 
+async function refreshClientProgress(ctx, listId, client) {
+  try {
+    return await getClientInitiationProgress(ctx.site.id, listId, client);
+  } catch (e) {
+    return null;
+  }
+}
+
 async function initiateProject(payload) {
   const ctx = await getSiteContext();
   const listId = ctx.lists.intake && ctx.lists.intake.id;
   if (!listId) throw new Error('Main Tracker (intake) list could not be resolved.');
   const columns = await getIntakeColumns();
 
-  const result = { created: [], errors: [], warnings: [], sent: [] };
+  const result = { created: [], errors: [], warnings: [], sent: [], skipped: [] };
   const departments = payload.departments || [];
-  for (let i = 0; i < departments.length; i += 1) {
-    const dept = departments[i];
-    let attemptedFields = null;
-    try {
-      const built = await buildMainTrackerItem(payload, dept, columns.columns, columns.choiceColumns, ctx.site.id);
-      attemptedFields = built.fields;
-      built.warnings.forEach(function (w) { result.warnings.push({ department: dept.department, message: w }); });
-      result.sent.push({ department: dept.department, fields: attemptedFields });
-      const item = await graphPost(
-        '/sites/' + ctx.site.id + '/lists/' + listId + '/items',
-        { fields: attemptedFields }
-      );
-      result.created.push(item);
-    } catch (error) {
-      result.errors.push({
-        department: dept.department,
-        fields: attemptedFields,
-        message: error && error.message ? error.message : 'Unknown error'
-      });
-    }
-  }
-  if (!result.created.length && result.errors.length) {
-    const err = new Error(result.errors[0].message);
-    err.details = result.errors;
-    throw err;
-  }
 
-  if (result.created.length) {
+  // Hold a per-client lock so two concurrent /api/initiate clicks cannot both
+  // pass the "already initiated?" check and create duplicate Main Tracker
+  // items. Inside the lock we re-read progress after every create, so even
+  // sequential-but-racy clicks stay safe.
+  return withClientLock(payload.client, async function () {
+    for (let i = 0; i < departments.length; i += 1) {
+      const dept = departments[i];
+      const deptName = normalizeText(dept.department);
+
+      // Re-check the live list right before creating — this is the real guard
+      // against duplicates (the pre-loop check alone races under concurrency).
+      const progress = await refreshClientProgress(ctx, listId, payload.client);
+      const alreadyInitiated = (progress && progress.initiatedDepartments) || [];
+      const already = alreadyInitiated.some(function (d) { return normalizeText(d) === deptName; });
+      if (already) {
+        result.skipped.push({ department: deptName, message: 'Already initiated — skipped to avoid duplicate.' });
+        continue;
+      }
+
+      let attemptedFields = null;
+      try {
+        const built = await buildMainTrackerItem(payload, dept, columns.columns, columns.choiceColumns, ctx.site.id);
+        attemptedFields = built.fields;
+        built.warnings.forEach(function (w) { result.warnings.push({ department: dept.department, message: w }); });
+        result.sent.push({ department: dept.department, fields: attemptedFields });
+        const item = await graphPost(
+          '/sites/' + ctx.site.id + '/lists/' + listId + '/items',
+          { fields: attemptedFields }
+        );
+        result.created.push(item);
+      } catch (error) {
+        result.errors.push({
+          department: dept.department,
+          fields: attemptedFields,
+          message: error && error.message ? error.message : 'Unknown error'
+        });
+      }
+    }
+
+    // Update the Client Master "Initiation Status" to reflect the client's real
+    // current state — ran after every attempt (not only on full success) so a
+    // partial/duplicate click still flips Not Started -> In Progress / Done.
     try {
-      const progress = await getClientInitiationProgress(ctx.site.id, listId, payload.client);
-      if (progress && ctx.lists.clients && ctx.lists.clients.id) {
-        await updateClientMasterProgress(ctx.site.id, ctx.lists.clients.id, payload.client, progress.progressText);
+      const finalProgress = await refreshClientProgress(ctx, listId, payload.client);
+      if (finalProgress && ctx.lists.clients && ctx.lists.clients.id) {
+        await updateClientMasterProgress(ctx.site.id, ctx.lists.clients.id, payload.client, finalProgress.progressText);
+        await updateClientMasterInitiationStatus(ctx.site.id, ctx.lists.clients.id, payload.client, finalProgress);
       }
     } catch (updErr) {
-      console.warn('Failed to update Client Master initiation progress:', updErr);
+      console.warn('Failed to update Client Master initiation status:', updErr);
     }
-  }
 
-  return result;
+    if (!result.created.length && result.errors.length && !result.skipped.length) {
+      const err = new Error(result.errors[0].message);
+      err.details = result.errors;
+      throw err;
+    }
+
+    return result;
+  });
 }
 
 async function buildBootstrap() {
@@ -527,30 +595,58 @@ async function getClientInitiationProgress(siteId, intakeListId, client) {
   const total = Array.isArray(client.departmentsInvolved) ? client.departmentsInvolved.length : 0;
   const count = initiated.size;
   return {
+    initiatedDepartments: Array.from(initiated),
     initiatedCount: count,
     totalDepartments: total,
     progressText: total > 0 && count >= total ? 'Done' : (total > 0 ? count + '/' + total : '')
   };
 }
 
+// Resolve a Client Master column's real internal name from its display name
+// (case-insensitive). Falls back to the display name itself, then to a naive
+// space→"_x0020_" guess, and warns if nothing matched — so a misnamed column
+// surfaces a clear error instead of a silent bad PATCH.
+function resolveClientColumnInternal(columns, displayName, naiveFallback) {
+  const map = columns.columns || {};
+  const keys = Object.keys(map);
+  for (var i = 0; i < keys.length; i += 1) {
+    if (keys[i].toLowerCase() === displayName.toLowerCase()) return map[keys[i]];
+  }
+  // Last-resort fallbacks in order of likelihood.
+  if (map[displayName] !== undefined) return map[displayName];
+  if (naiveFallback && map[naiveFallback] !== undefined) return map[naiveFallback];
+  console.warn('Client Master column "' + displayName + '" not found in list columns. Tried fallback "' + naiveFallback + '". Available: ' + keys.join(', '));
+  return naiveFallback || null;
+}
+
 async function updateClientMasterProgress(siteId, clientsListId, client, progressText) {
   if (!clientsListId || !client || !client.id || !progressText) return null;
   const columns = await getListColumns(siteId, clientsListId);
-  const displayNames = Object.keys(columns.columns);
-  let internalName = null;
-  for (var i = 0; i < displayNames.length; i++) {
-    if (displayNames[i].toLowerCase() === 'initiation progress') {
-      internalName = columns.columns[displayNames[i]];
-      break;
-    }
-  }
-  if (!internalName) {
-    internalName = 'Initiation_x0020_Progress';
-  }
-
+  const internalName = resolveClientColumnInternal(columns, 'Initiation Progress', 'Initiation_x0020_Progress');
+  if (!internalName) return null;
   const res = await graphPatch(
     '/sites/' + siteId + '/lists/' + clientsListId + '/items/' + client.id,
     { fields: { [internalName]: progressText } }
+  );
+  return res;
+}
+
+async function updateClientMasterInitiationStatus(siteId, clientsListId, client, progress) {
+  if (!clientsListId || !client || !client.id || !progress) return null;
+  const columns = await getListColumns(siteId, clientsListId);
+  const internalName = resolveClientColumnInternal(columns, 'Initiation Status', 'Initiation_x0020_Status');
+  if (!internalName) return null;
+
+  const total = progress.totalDepartments || 0;
+  const count = progress.initiatedCount || 0;
+  let statusValue;
+  if (total === 0 || count === 0) statusValue = CLIENT_INITIATION_STATUS.NOT_STARTED;
+  else if (count >= total) statusValue = CLIENT_INITIATION_STATUS.DONE;
+  else statusValue = CLIENT_INITIATION_STATUS.IN_PROGRESS;
+
+  const res = await graphPatch(
+    '/sites/' + siteId + '/lists/' + clientsListId + '/items/' + client.id,
+    { fields: { [internalName]: statusValue } }
   );
   return res;
 }
