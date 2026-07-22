@@ -80,7 +80,6 @@ function parseInitiatedDepartments(fields) {
 
 function buildLookupKeys(fields, itemId) {
   return dedupe([
-    normalizeText(itemId),
     normalizeText(safeField(fields, PROJECT_FIELD_CANDIDATES.clientKey)),
     normalizeText(safeField(fields, CLIENT_FIELD_CANDIDATES.trackingId)),
     normalizeText(safeField(fields, CLIENT_FIELD_CANDIDATES.quoteId)),
@@ -153,6 +152,7 @@ async function loadInitiatedDepartments(siteId, listId) {
   if (!listId) return {};
   const items = await graphGetAll('/sites/' + siteId + '/lists/' + listId + '/items?$expand=fields&$top=500');
   const map = {};
+  console.log('[InitiationDebug] Loading initiated departments from Main Tracker — total items:', items.length);
 
   items.forEach(function (item) {
     const fields = item.fields || {};
@@ -165,6 +165,7 @@ async function loadInitiatedDepartments(siteId, listId) {
         if (!map[key]) map[key] = [];
         if (!map[key].some(function (e) { return e.department === department; })) {
           map[key].push({ department: department, services: services, scope: scope });
+          console.log('[InitiationDebug] Indexed Main Tracker item', item.id, 'as key', key, 'dept:', department);
         }
       });
     });
@@ -503,6 +504,7 @@ async function initiateProject(payload) {
       const alreadyInitiated = (progress && progress.initiatedDepartments) || [];
       const already = alreadyInitiated.some(function (d) { return normalizeText(d) === deptName; });
       if (already) {
+        console.log('[InitiationDebug] Skipping department', deptName, 'for client', payload.client.clientName, '- already initiated:', alreadyInitiated);
         result.skipped.push({ department: deptName, message: 'Already initiated — skipped to avoid duplicate.' });
         continue;
       }
@@ -578,6 +580,15 @@ async function getClientInitiationProgress(siteId, intakeListId, client) {
   ];
   const initiated = new Set();
 
+  console.log('[InitiationDebug] Checking progress for client:', {
+    id: client.id,
+    trackingId: client.trackingId,
+    quoteId: client.quoteId,
+    clientName: client.clientName,
+    clientKeys: clientKeys.filter(Boolean),
+    mainTrackerItemCount: items.length
+  });
+
   items.forEach(function (item) {
     const fields = item.fields || {};
     const departments = dedupe(splitList(safeField(fields, PROJECT_FIELD_CANDIDATES.departments) || safeField(fields, PROJECT_FIELD_CANDIDATES.department)));
@@ -588,12 +599,14 @@ async function getClientInitiationProgress(siteId, intakeListId, client) {
       return itemKeys.some(function (ik) { return ik === ck; });
     });
     if (matches) {
+      console.log('[InitiationDebug] MATCH: Client', client.clientName, 'matched Main Tracker item', item.id, 'with keys', itemKeys.filter(Boolean), '- departments:', departments);
       departments.forEach(function (d) { initiated.add(d); });
     }
   });
 
   const total = Array.isArray(client.departmentsInvolved) ? client.departmentsInvolved.length : 0;
   const count = initiated.size;
+  console.log('[InitiationDebug] Result for client', client.clientName, '- initiatedCount:', count, 'totalDepartments:', total, 'initiatedDepartments:', Array.from(initiated));
   return {
     initiatedDepartments: Array.from(initiated),
     initiatedCount: count,
@@ -602,19 +615,33 @@ async function getClientInitiationProgress(siteId, intakeListId, client) {
   };
 }
 
-// Resolve a Client Master column's real internal name from its display name
-// (case-insensitive). Falls back to the display name itself, then to a naive
-// space→"_x0020_" guess, and warns if nothing matched — so a misnamed column
-// surfaces a clear error instead of a silent bad PATCH.
+// Resolve a Client Master column's real internal name from its display name.
+// Handles known SharePoint column typos (e.g. "Inititation status") and falls
+// back to case-insensitive lookups so misnamed columns surface a clear error
+// instead of a silent bad PATCH.
 function resolveClientColumnInternal(columns, displayName, naiveFallback) {
   const map = columns.columns || {};
   const keys = Object.keys(map);
   for (var i = 0; i < keys.length; i += 1) {
     if (keys[i].toLowerCase() === displayName.toLowerCase()) return map[keys[i]];
   }
-  // Last-resort fallbacks in order of likelihood.
+  var aliases = {
+    'Initiation Status': ['Inititation Status'],
+    'Initiation Progress': ['Inititation Progress']
+  };
+  var aliasList = aliases[displayName] || [];
+  for (var a = 0; a < aliasList.length; a += 1) {
+    for (var j = 0; j < keys.length; j += 1) {
+      if (keys[j].toLowerCase() === aliasList[a].toLowerCase()) return map[keys[j]];
+    }
+  }
   if (map[displayName] !== undefined) return map[displayName];
-  if (naiveFallback && map[naiveFallback] !== undefined) return map[naiveFallback];
+  if (naiveFallback) {
+    if (map[naiveFallback] !== undefined) return map[naiveFallback];
+    for (var k = 0; k < keys.length; k += 1) {
+      if (keys[k].toLowerCase() === naiveFallback.toLowerCase()) return map[keys[k]];
+    }
+  }
   console.warn('Client Master column "' + displayName + '" not found in list columns. Tried fallback "' + naiveFallback + '". Available: ' + keys.join(', '));
   return naiveFallback || null;
 }
@@ -623,7 +650,10 @@ async function updateClientMasterProgress(siteId, clientsListId, client, progres
   if (!clientsListId || !client || !client.id || !progressText) return null;
   const columns = await getListColumns(siteId, clientsListId);
   const internalName = resolveClientColumnInternal(columns, 'Initiation Progress', 'Initiation_x0020_Progress');
-  if (!internalName) return null;
+  if (!internalName) {
+    console.log('[InitiationDebug] Skipping Initiation Progress update for client', client.clientName, '- column not found (optional).');
+    return null;
+  }
   const res = await graphPatch(
     '/sites/' + siteId + '/lists/' + clientsListId + '/items/' + client.id,
     { fields: { [internalName]: progressText } }
@@ -635,7 +665,10 @@ async function updateClientMasterInitiationStatus(siteId, clientsListId, client,
   if (!clientsListId || !client || !client.id || !progress) return null;
   const columns = await getListColumns(siteId, clientsListId);
   const internalName = resolveClientColumnInternal(columns, 'Initiation Status', 'Initiation_x0020_Status');
-  if (!internalName) return null;
+  if (!internalName) {
+    console.warn('[InitiationDebug] Cannot update Initiation Status for client', client.clientName, '- column not resolved.');
+    return null;
+  }
 
   const total = progress.totalDepartments || 0;
   const count = progress.initiatedCount || 0;
@@ -644,10 +677,13 @@ async function updateClientMasterInitiationStatus(siteId, clientsListId, client,
   else if (count >= total) statusValue = CLIENT_INITIATION_STATUS.DONE;
   else statusValue = CLIENT_INITIATION_STATUS.IN_PROGRESS;
 
+  console.log('[InitiationDebug] Updating client', client.clientName, '(id:', client.id, ') Initiation Status to', statusValue, '- total:', total, 'count:', count);
+
   const res = await graphPatch(
     '/sites/' + siteId + '/lists/' + clientsListId + '/items/' + client.id,
     { fields: { [internalName]: statusValue } }
   );
+  console.log('[InitiationDebug] Update result for client', client.clientName, ':', res ? 'success' : 'failed');
   return res;
 }
 

@@ -148,8 +148,8 @@ var TRAINING_SERVICES = [
 // department (discovered in this tenant: Management, Training & Consulting,
 // VAPT, SOC, Compliance). Update these to match your directory.
 var DEPARTMENT_GENERAL = [
-  F('Priority', 'priority', 'select', ['High', 'Medium', 'Low']),
-  F('Remarks', 'remarks', 'textarea')
+  F('Priority', 'priority', 'select', ['High', 'Medium', 'Low'], { required: true }),
+  F('Remarks', 'remarks', 'textarea', null, { required: true })
 ];
 
 var VAPT_PROJECT_TYPES = ['SEBI', 'IFSCA', 'Enterprise', 'Bank & RBI', 'International', 'White-label', 'Government'];
