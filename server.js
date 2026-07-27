@@ -171,9 +171,13 @@ app.post('/api/initiate', async function (req, res) {
     res.setHeader('Cache-Control', 'no-store');
     res.json({ ok: result.errors.length === 0, created: result.created, errors: result.errors, warnings: result.warnings, sent: result.sent, payload: payload });
   } catch (error) {
+    const details = error.details || [];
+    const errMsg = error.message || 'An unexpected error occurred.';
     res.status(500).json({
       error: 'Failed to save to Main Tracker',
-      message: 'An unexpected error occurred.'
+      message: errMsg,
+      details: details,
+      savedCount: 0
     });
   }
 });

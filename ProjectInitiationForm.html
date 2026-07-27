@@ -1246,7 +1246,9 @@ async function initiateProject() {
     }
     var heading = res.ok
       ? '<div class="json-actions" style="color:#10b981;font-weight:700;">✓ Saved ' + (data.created ? data.created.length : 0) + ' item(s) to Main Tracker</div>'
-      : '<div class="json-actions" style="color:#ef4444;font-weight:700;">⚠ Save failed — showing JSON payload</div>';
+      : '<div class="json-actions" style="color:#ef4444;font-weight:700;">⚠ Save failed — ' + (data.message || 'Unknown error') + ' (' + (data.savedCount != null ? data.savedCount : 0) + ' item(s) saved)</div>' +
+        (data.details && data.details.length ? '<div class="json-actions" style="color:#ef4444;font-weight:600;margin-top:4px;">Failed departments:</div>' +
+          '<div style="white-space:pre-wrap;color:#b45309;">' + escapeHtml(data.details.map(function (d) { return '• ' + d.department + ': ' + d.message; }).join('\n')) + '</div>' : '');
     var jsonStr = JSON.stringify(data, null, 2);
     elOut.innerHTML = heading + warningsHtml + '<div id="jsonText" style="white-space:pre-wrap;">' + escapeHtml(jsonStr) + '</div>';
     elOut.classList.add('visible');

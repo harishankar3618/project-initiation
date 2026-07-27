@@ -529,6 +529,30 @@ async function initiateProject(payload) {
       }
     }
 
+    if (result.created.length === 0) {
+      console.log('[InitiationDebug] Zero items were saved. Summary for client:', payload.client.clientName);
+      console.log('[InitiationDebug]   Departments attempted:', departments.map(function (d) { return d.department; }).join(', '));
+      console.log('[InitiationDebug]   Errors:', result.errors.length);
+      result.errors.forEach(function (err, idx) {
+        console.log('[InitiationDebug]     Error #' + (idx + 1) + ' — department:', err.department, '— message:', err.message);
+        if (err.fields) {
+          console.log('[InitiationDebug]       Attempted fields:', JSON.stringify(err.fields));
+        }
+      });
+      if (result.warnings.length) {
+        console.log('[InitiationDebug]   Warnings:', result.warnings.length);
+        result.warnings.forEach(function (warn) {
+          console.log('[InitiationDebug]     Warning — department:', warn.department, '— message:', warn.message);
+        });
+      }
+      if (result.skipped.length) {
+        console.log('[InitiationDebug]   Skipped:', result.skipped.length);
+        result.skipped.forEach(function (skip) {
+          console.log('[InitiationDebug]     Skipped — department:', skip.department, '— message:', skip.message);
+        });
+      }
+    }
+
     // Update the Client Master "Initiation Status" to reflect the client's real
     // current state — ran after every attempt (not only on full success) so a
     // partial/duplicate click still flips Not Started -> In Progress / Done.
@@ -543,7 +567,7 @@ async function initiateProject(payload) {
     }
 
     if (!result.created.length && result.errors.length && !result.skipped.length) {
-      const err = new Error(result.errors[0].message);
+      const err = new Error('Failed to save ' + result.errors.length + ' department(s) to Main Tracker. Zero items saved. First error: ' + result.errors[0].message);
       err.details = result.errors;
       throw err;
     }
