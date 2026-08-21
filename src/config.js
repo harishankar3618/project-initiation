@@ -48,7 +48,8 @@ const MAIN_TRACKER_FIELDS = {
   status: 'Status',
   scopeJson: 'Scope json',
   industry: 'Industry',
-  projectType: 'Project Type'
+  projectType: 'Project Type',
+  refId: 'Ref ID'                     // Lookup to Client Master item ID
 };
 
 // Default value written to the Main Tracker "Status" choice column on initiate.

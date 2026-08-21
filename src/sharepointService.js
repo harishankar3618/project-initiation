@@ -451,6 +451,7 @@ async function buildMainTrackerItem(payload, dept, columns, choiceColumns, siteI
   setField(fields, 'scopeJson', scopeJson);
   setField(fields, 'industry', client.industry);
   setField(fields, 'projectType', dept.projectType || '');
+  setField(fields, 'refId', client.id);
   await setPersonField(fields, 'bdPerson', payload.bdPerson);
   setField(fields, 'contactName', client.contact);
   setField(fields, 'contactDesignation', client.designation);
