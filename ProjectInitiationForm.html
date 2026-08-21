@@ -1100,11 +1100,16 @@ function formatServiceScopeText(kind, services) {
   if (!services || !services.length) return '—';
   return services.map(function (s) {
     if (kind === 'grc') {
+      // Resolve "Other" custom values for display
+      var typeDisplay = (s.type === 'Other' && s.customTypeName) ? s.customTypeName : (s.type || 'Service');
+      var regulatorDisplay = (s.regulator === 'Other' && s.customRegulator) ? s.customRegulator : (s.regulator || '—');
+      var assessmentTypeDisplay = (s.assessmentType === 'Other' && s.customAssessmentType) ? s.customAssessmentType : (s.assessmentType || '—');
+      
       var lines = [
-        'Regulator / Exchange: ' + (s.regulator || '—'),
-        'Assessment Type: ' + (s.assessmentType || '—')
+        'Regulator / Exchange: ' + regulatorDisplay,
+        'Assessment Type: ' + assessmentTypeDisplay
       ];
-      return '• ' + (s.type || 'Service') + '\n  ' + lines.join('\n  ');
+      return '• ' + typeDisplay + '\n  ' + lines.join('\n  ');
     }
     var scope = s.scope || {};
     var detail = Object.keys(scope).filter(function (k) {
