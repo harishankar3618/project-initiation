@@ -49,7 +49,12 @@ const MAIN_TRACKER_FIELDS = {
   scopeJson: 'Scope json',
   industry: 'Industry',
   projectType: 'Project Type',
-  refId: 'Ref ID'                     // Lookup to Client Master item ID
+  refId: 'Ref ID'                     // Single line of text - stores Client Master item ID
+};
+
+// Fallback internal names for columns that might have different display names
+const MAIN_TRACKER_FIELDS_FALLBACK = {
+  refId: 'Ref_x0020_ID'               // Fallback if "Ref ID" display name not found
 };
 
 // Default value written to the Main Tracker "Status" choice column on initiate.
@@ -74,6 +79,7 @@ module.exports = {
   CLIENT_FIELD_CANDIDATES,
   PROJECT_FIELD_CANDIDATES,
   MAIN_TRACKER_FIELDS,
+  MAIN_TRACKER_FIELDS_FALLBACK,
   DEFAULT_STATUS,
   CLIENT_INITIATION_STATUS
 };

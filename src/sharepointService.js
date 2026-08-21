@@ -1,4 +1,4 @@
-const { SITE_URL, LIST_NAMES, CLIENT_FIELD_CANDIDATES, PROJECT_FIELD_CANDIDATES, MAIN_TRACKER_FIELDS, DEFAULT_STATUS, CLIENT_INITIATION_STATUS } = require('./config');
+const { SITE_URL, LIST_NAMES, CLIENT_FIELD_CANDIDATES, PROJECT_FIELD_CANDIDATES, MAIN_TRACKER_FIELDS, MAIN_TRACKER_FIELDS_FALLBACK, DEFAULT_STATUS, CLIENT_INITIATION_STATUS } = require('./config');
 const { graphGet, graphGetAll, graphPost, graphPatch, mapGraphUser } = require('./graphClient');
 const metadata = require('./metadata');
 
@@ -248,9 +248,11 @@ async function getListColumns(siteId, listId) {
   return { columns: map, choiceColumns: choices };
 }
 
+// Clear intake columns cache to pick up new "Ref ID" column
 let cachedIntakeColumns = null;
 async function getIntakeColumns() {
-  if (cachedIntakeColumns) return cachedIntakeColumns;
+  // Force refresh to pick up new columns
+  cachedIntakeColumns = null;
   const ctx = await getSiteContext();
   const listId = ctx.lists.intake && ctx.lists.intake.id;
   cachedIntakeColumns = await getListColumns(ctx.site.id, listId);
@@ -350,6 +352,11 @@ async function buildMainTrackerItem(payload, dept, columns, choiceColumns, siteI
       const lower = String(displayName).toLowerCase();
       const match = Object.keys(columns).find(function (k) { return k.toLowerCase() === lower; });
       if (match) return columns[match];
+      // Fallback to known internal names for common columns
+      if (MAIN_TRACKER_FIELDS_FALLBACK && MAIN_TRACKER_FIELDS_FALLBACK[displayName]) {
+        const fallback = MAIN_TRACKER_FIELDS_FALLBACK[displayName];
+        if (columns[fallback] !== undefined) return columns[fallback];
+      }
       return null;
     }
     return columns && columns[displayName] ? columns[displayName] : displayName;
@@ -451,7 +458,14 @@ async function buildMainTrackerItem(payload, dept, columns, choiceColumns, siteI
   setField(fields, 'scopeJson', scopeJson);
   setField(fields, 'industry', client.industry);
   setField(fields, 'projectType', dept.projectType || '');
+  
+  // Debug: Log client ID and column resolution for Ref ID
+  console.log('[RefIdDebug] Client ID:', client.id, '| Client Name:', client.name);
+  const refIdInternal = resolveInternal(MAIN_TRACKER_FIELDS.refId);
+  console.log('[RefIdDebug] Ref ID column display name:', MAIN_TRACKER_FIELDS.refId, '| Resolved internal name:', refIdInternal);
+  console.log('[RefIdDebug] Available columns keys:', columns ? Object.keys(columns) : 'none');
   setField(fields, 'refId', client.id);
+  
   await setPersonField(fields, 'bdPerson', payload.bdPerson);
   setField(fields, 'contactName', client.contact);
   setField(fields, 'contactDesignation', client.designation);
