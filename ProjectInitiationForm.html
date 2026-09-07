@@ -132,26 +132,26 @@
       </div>
       <hr />
       <div class="form-grid">
-        <div class="form-group"><label>Client Name</label><input type="text" id="cf_clientName" disabled /></div>
-        <div class="form-group"><label>Contact Person</label><input type="text" id="cf_contactPerson" disabled /></div>
+        <div class="form-group"><label>Client Name</label><input type="text" id="cf_clientName" /></div>
+        <div class="form-group"><label>Contact Person</label><input type="text" id="cf_contactPerson" /></div>
       </div>
       <div class="form-grid">
-        <div class="form-group"><label>Designation</label><input type="text" id="cf_designation" disabled /></div>
-        <div class="form-group"><label>Phone</label><input type="text" id="cf_phone" disabled /></div>
+        <div class="form-group"><label>Designation</label><input type="text" id="cf_designation" /></div>
+        <div class="form-group"><label>Phone</label><input type="text" id="cf_phone" /></div>
       </div>
       <div class="form-grid">
-        <div class="form-group"><label>Email</label><input type="text" id="cf_email" disabled /></div>
+        <div class="form-group"><label>Email</label><input type="text" id="cf_email" /></div>
         <div class="form-group"><label>BD Person (auto-resolved)</label><div id="bdPersonPicker"></div></div>
       </div>
       <div class="form-grid">
-        <div class="form-group"><label>Industry Type</label><input type="text" id="cf_industry" disabled /></div>
+        <div class="form-group"><label>Industry Type</label><input type="text" id="cf_industry" /></div>
       </div>
       <div class="form-grid">
-        <div class="form-group"><label>Won Date</label><input type="text" id="cf_wonDate" disabled /></div>
+        <div class="form-group"><label>Won Date</label><input type="text" id="cf_wonDate" /></div>
         <div class="form-group">
           <label>Departments Involved</label>
           <div style="display:flex;align-items:center;gap:0.5rem;">
-            <input type="text" id="cf_departments" disabled style="flex:1;" />
+            <input type="text" id="cf_departments" style="flex:1;" />
             <span id="initiationProgress" style="font-size:0.85rem;font-weight:600;color:#64748b;white-space:nowrap;"></span>
             <button id="resetInitiationBtn" style="font-size:0.75rem;color:#ef4444;background:none;border:none;cursor:pointer;display:none;" title="Reset initiated departments for this client">✕ Reset</button>
           </div>
@@ -379,6 +379,17 @@ async function init() {
   });
   document.getElementById('bdPersonPicker').appendChild(bd.element);
   window.__bdPicker = bd;
+
+  // Sync edited departments text back into client state so Step 2 reflects changes
+  var deptInput = document.getElementById('cf_departments');
+  if (deptInput) {
+    deptInput.addEventListener('input', function () {
+      if (!state.selectedClient) return;
+      var val = this.value.trim();
+      state.selectedClient.departmentsInvolved = val ? val.split(',').map(function (s) { return s.trim(); }).filter(Boolean) : [];
+      applyClientDepartments();
+    });
+  }
 
   renderDepartmentGrid();
   renderDepartmentCards();
@@ -993,19 +1004,24 @@ function personToJson(p) {
 
 function renderReview() {
   var c = state.selectedClient || {};
+  var clientName = (document.getElementById('cf_clientName').value || '').trim();
+  var contactPerson = (document.getElementById('cf_contactPerson').value || '').trim();
+  var designation = (document.getElementById('cf_designation').value || '').trim();
+  var phone = (document.getElementById('cf_phone').value || '').trim();
+  var email = (document.getElementById('cf_email').value || '').trim();
   var html = '<div class="review-summary">' +
-    row('Client Name', c.clientName) +
-    row('Contact Person', c.contactPerson) +
-    row('Designation', c.designation) +
-    row('Phone', c.phone) +
-    row('Email', c.email) +
+    row('Client Name', clientName) +
+    row('Contact Person', contactPerson) +
+    row('Designation', designation) +
+    row('Phone', phone) +
+    row('Email', email) +
     row('BD Person', BD_PERSON ? BD_PERSON.name + (BD_PERSON.email ? ' <' + BD_PERSON.email + '>' : '') : '') +
   '</div>';
   html += '<h4 style="margin-bottom:0.5rem;">Delivery Scope Tree</h4><div class="review-tree">';
   var depts = orderedSelectedDepartments();
   if (!depts.length) html += '<div>No departments selected.</div>';
   else {
-    html += '<div style="font-weight:700;">' + escapeHtml(c.clientName || 'Project') + ' Root</div>';
+    html += '<div style="font-weight:700;">' + escapeHtml(clientName || 'Project') + ' Root</div>';
     depts.forEach(function (name, di) {
       var lastD = di === depts.length - 1;
       var dPipe = lastD ? '    ' : '│   ';
@@ -1122,11 +1138,25 @@ function formatServiceScopeText(kind, services) {
 
 function buildPayload() {
   var c = state.selectedClient || {};
+  var clientName = (document.getElementById('cf_clientName').value || '').trim();
+  var contactPerson = (document.getElementById('cf_contactPerson').value || '').trim();
+  var designation = (document.getElementById('cf_designation').value || '').trim();
+  var phone = (document.getElementById('cf_phone').value || '').trim();
+  var email = (document.getElementById('cf_email').value || '').trim();
+  var industry = (document.getElementById('cf_industry').value || '').trim();
+  var wonDate = (document.getElementById('cf_wonDate').value || '').trim();
+  var departmentsInvolved = (document.getElementById('cf_departments').value || '').trim().split(',').map(function (s) { return s.trim(); }).filter(Boolean);
   var client = {
     id: c.id || '',
-    name: c.clientName || '', contact: c.contactPerson || '', designation: c.designation || '',
-    phone: c.phone || '', email: c.email || '',
-    requirement: c.requirement || '', industry: c.industry || '', wonDate: c.wonDate || '', departmentsInvolved: c.departmentsInvolved || []
+    name: clientName,
+    contact: contactPerson,
+    designation: designation,
+    phone: phone,
+    email: email,
+    requirement: c.requirement || '',
+    industry: industry,
+    wonDate: wonDate,
+    departmentsInvolved: departmentsInvolved
   };
   var departments = orderedSelectedDepartments().map(function (name) {
     var ds = state.depts[name];
@@ -1207,7 +1237,8 @@ function generateJson() {
     var blob = new Blob([jsonStr], { type: 'application/json' });
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
-    var cname = (state.selectedClient && state.selectedClient.clientName ? state.selectedClient.clientName : 'project').replace(/\s+/g, '_');
+    var editedClientName = (document.getElementById('cf_clientName').value || '').trim();
+    var cname = (editedClientName || (state.selectedClient && state.selectedClient.clientName) || 'project').replace(/\s+/g, '_');
     a.href = url; a.download = 'project_initiation_' + cname + '.json';
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
   });
