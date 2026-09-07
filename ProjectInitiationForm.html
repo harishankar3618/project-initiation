@@ -757,24 +757,16 @@ function renderProjectType(name, kind) {
           el('input', { type: 'text', value: svc.customTypeName || '', oninput: function (e) { svc.customTypeName = e.target.value; } })
         ]));
       }
-      var regulatorOptions = cfg.regulators.slice();
-      if (regulatorOptions.indexOf('Other') === -1) regulatorOptions.push('Other');
-      var regulatorSelect = renderSelectField('Regulator / Exchange', regulatorOptions, svc.regulator, function (v) { svc.regulator = v; renderDepartmentCards(); });
-      card.appendChild(regulatorSelect);
-      if (svc.regulator === 'Other') {
-        card.appendChild(el('div', { class: 'form-group' }, [
-          el('label', { text: 'Specify Other Regulator / Exchange' }),
-          el('input', { type: 'text', value: svc.customRegulator || '', oninput: function (e) { svc.customRegulator = e.target.value; } })
-        ]));
-      }
-      var assessmentSelect = renderSelectField('Assessment Type', cfg.assessmentTypes, svc.assessmentType, function (v) { svc.assessmentType = v; renderDepartmentCards(); });
-      card.appendChild(assessmentSelect);
-      if (svc.assessmentType === 'Other') {
-        card.appendChild(el('div', { class: 'form-group' }, [
-          el('label', { text: 'Specify Other Assessment Type' }),
-          el('input', { type: 'text', value: svc.customAssessmentType || '', oninput: function (e) { svc.customAssessmentType = e.target.value; } })
-        ]));
-      }
+      var regulatorInput = el('div', { class: 'form-group' }, [
+        el('label', { text: 'Regulator / Exchange' }),
+        el('input', { type: 'text', value: svc.regulator || '', placeholder: 'Enter regulator / exchange', oninput: function (e) { svc.regulator = e.target.value; } })
+      ]);
+      card.appendChild(regulatorInput);
+      var assessmentInput = el('div', { class: 'form-group' }, [
+        el('label', { text: 'Assessment Type' }),
+        el('input', { type: 'text', value: svc.assessmentType || '', placeholder: 'Enter assessment type', oninput: function (e) { svc.assessmentType = e.target.value; } })
+      ]);
+      card.appendChild(assessmentInput);
     } else {
       if (svc.type === 'Other') {
         card.appendChild(el('div', { class: 'section-label', text: 'Project Type Name' }));
