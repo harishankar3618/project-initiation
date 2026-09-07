@@ -757,11 +757,10 @@ function renderProjectType(name, kind) {
           el('input', { type: 'text', value: svc.customTypeName || '', oninput: function (e) { svc.customTypeName = e.target.value; } })
         ]));
       }
-      var regulatorInput = el('div', { class: 'form-group' }, [
-        el('label', { text: 'Regulator / Exchange' }),
-        el('input', { type: 'text', value: svc.regulator || '', placeholder: 'Enter regulator / exchange', oninput: function (e) { svc.regulator = e.target.value; } })
-      ]);
-      card.appendChild(regulatorInput);
+      var regulatorOptions = cfg.regulators.slice();
+      if (regulatorOptions.indexOf('Other') === -1) regulatorOptions.push('Other');
+      var regulatorSelect = renderSelectField('Regulator / Exchange', regulatorOptions, svc.regulator, function (v) { svc.regulator = v; });
+      card.appendChild(regulatorSelect);
       var assessmentInput = el('div', { class: 'form-group' }, [
         el('label', { text: 'Assessment Type' }),
         el('input', { type: 'text', value: svc.assessmentType || '', placeholder: 'Enter assessment type', oninput: function (e) { svc.assessmentType = e.target.value; } })
