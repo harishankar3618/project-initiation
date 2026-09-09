@@ -669,6 +669,18 @@ function renderSelectField(label, options, value, onChange) {
   return wrap;
 }
 
+// Toggle a regulator selection on/off for a GRC service sub-card.
+function toggleRegulator(svc, opt, selected) {
+  if (!Array.isArray(svc.regulator)) svc.regulator = [];
+  if (selected) {
+    if (svc.regulator.indexOf(opt) === -1) svc.regulator.push(opt);
+  } else {
+    svc.regulator = svc.regulator.filter(function (r) { return r !== opt; });
+    if (opt === 'Other') svc.customRegulator = '';
+  }
+  renderDepartmentCards();
+}
+
 // Toggle a service (by type) on/off for SOC/GRC/Training departments.
 function toggleService(name, type, selected) {
   var cfg = META.departmentConfig[name];
@@ -676,7 +688,7 @@ function toggleService(name, type, selected) {
   if (selected) {
     if (!ds.services.some(function (s) { return s.type === type; })) {
       var svc = { type: type };
-      if (cfg.kind === 'grc') { svc.regulator = ''; svc.assessmentType = ''; }
+      if (cfg.kind === 'grc') { svc.regulator = []; svc.assessmentType = ''; }
       else if (cfg.kind === 'training') { svc.mode = ''; }
       else { svc.scope = {}; }
       // Initialize custom fields
@@ -759,8 +771,27 @@ function renderProjectType(name, kind) {
       }
       var regulatorOptions = cfg.regulators.slice();
       if (regulatorOptions.indexOf('Other') === -1) regulatorOptions.push('Other');
-      var regulatorSelect = renderSelectField('Regulator / Exchange', regulatorOptions, svc.regulator, function (v) { svc.regulator = v; });
-      card.appendChild(regulatorSelect);
+      var regGrid = el('div', { class: 'assessment-grid', style: 'margin-bottom:0.75rem;' });
+      regulatorOptions.forEach(function (opt) {
+        var checked = (svc.regulator || []).indexOf(opt) !== -1;
+        var regCard = el('div', { class: 'assessment-card' + (checked ? ' selected' : ''), dataset: { reg: opt } }, [
+          el('input', { type: 'checkbox', id: 'reg-' + slug(name) + '-' + slug(opt), checked: checked }),
+          el('label', { for: 'reg-' + slug(name) + '-' + slug(opt), text: opt })
+        ]);
+        regCard.addEventListener('click', function (e) {
+          if (e.target.tagName === 'INPUT' || e.target.tagName === 'LABEL') return;
+          var cb = regCard.querySelector('input'); cb.checked = !cb.checked; toggleRegulator(svc, opt, cb.checked);
+        });
+        regCard.querySelector('input').addEventListener('change', function (e) { toggleRegulator(svc, opt, e.target.checked); });
+        regGrid.appendChild(regCard);
+      });
+      card.appendChild(regGrid);
+      if ((svc.regulator || []).indexOf('Other') !== -1) {
+        card.appendChild(el('div', { class: 'form-group' }, [
+          el('label', { text: 'Specify Other Regulator / Exchange' }),
+          el('input', { type: 'text', value: svc.customRegulator || '', placeholder: 'Enter regulator / exchange', oninput: function (e) { svc.customRegulator = e.target.value; } })
+        ]));
+      }
       var assessmentInput = el('div', { class: 'form-group' }, [
         el('label', { text: 'Assessment Type' }),
         el('input', { type: 'text', value: svc.assessmentType || '', placeholder: 'Enter assessment type', oninput: function (e) { svc.assessmentType = e.target.value; } })
@@ -781,7 +812,7 @@ function renderProjectType(name, kind) {
   // Allow adding as many custom "Other" services as needed.
   if (selectedTypes.indexOf('Other') !== -1) {
     wrap.appendChild(el('button', { class: 'btn-add-other', text: '+ Add another Other service', onclick: function () {
-      ds.services.push({ type: 'Other', customTypeName: '', regulator: '', assessmentType: '', scope: {}, customAssessmentType: '', customRegulator: '' });
+      ds.services.push({ type: 'Other', customTypeName: '', regulator: [], assessmentType: '', scope: {}, customAssessmentType: '', customRegulator: '' });
       renderDepartmentCards();
     } }));
   }
@@ -940,11 +971,11 @@ if (kind === 'training') {
 for (var si2 = 0; si2 < ds.services.length; si2 += 1) {
              var svc = ds.services[si2];
              if (kind === 'grc') {
-               if (!svc.regulator) { alert('Select a Regulator / Exchange for ' + (svc.type || 'service') + ' in: ' + name); return; }
-               if (svc.regulator === 'Other') {
-                   var customRegulator = svc.customRegulator || '';
-                   if (!customRegulator.trim()) { alert('Please specify the Other Regulator / Exchange for ' + (svc.type || 'service') + ' in: ' + name); return; }
-               }
+                if (!svc.regulator || !svc.regulator.length) { alert('Select a Regulator / Exchange for ' + (svc.type || 'service') + ' in: ' + name); return; }
+                if (svc.regulator.indexOf('Other') !== -1) {
+                    var customRegulator = svc.customRegulator || '';
+                    if (!customRegulator.trim()) { alert('Please specify the Other Regulator / Exchange for ' + (svc.type || 'service') + ' in: ' + name); return; }
+                }
                if (!svc.assessmentType) { alert('Select an Assessment Type for ' + (svc.type || 'service') + ' in: ' + name); return; }
                // NEW: Check for Other in service type (audit type) with empty customTypeName
                if (svc.type === 'Other') {
@@ -1036,14 +1067,14 @@ function renderReview() {
             var lastS = si === ds.services.length - 1;
              var sTypeDisplay = s.type;
              var sAssessmentTypeDisplay = s.assessmentType;
-             var sRegulatorDisplay = s.regulator;
-             if (kind === 'grc') {
-                 if (s.type === 'Other' && s.customTypeName) {
-                     sTypeDisplay = s.customTypeName;
-                 }
-                 if (s.regulator === 'Other' && s.customRegulator) {
-                     sRegulatorDisplay = s.customRegulator;
-                 }
+              var sRegulatorDisplay = Array.isArray(s.regulator) ? s.regulator.join(', ') : s.regulator;
+              if (kind === 'grc') {
+                  if (s.type === 'Other' && s.customTypeName) {
+                      sTypeDisplay = s.customTypeName;
+                  }
+                  if (s.regulator && s.regulator.indexOf('Other') !== -1 && s.customRegulator) {
+                      sRegulatorDisplay = s.customRegulator;
+                  }
                  if (s.assessmentType === 'Other' && s.customAssessmentType) {
                      sAssessmentTypeDisplay = s.customAssessmentType;
                  }
@@ -1109,7 +1140,9 @@ function formatServiceScopeText(kind, services) {
     if (kind === 'grc') {
       // Resolve "Other" custom values for display
       var typeDisplay = (s.type === 'Other' && s.customTypeName) ? s.customTypeName : (s.type || 'Service');
-      var regulatorDisplay = (s.regulator === 'Other' && s.customRegulator) ? s.customRegulator : (s.regulator || '—');
+      var regulatorDisplay = Array.isArray(s.regulator) && s.regulator.length
+        ? (s.regulator.indexOf('Other') !== -1 && s.customRegulator ? s.customRegulator : s.regulator.join(', '))
+        : '—';
       var assessmentTypeDisplay = (s.assessmentType === 'Other' && s.customAssessmentType) ? s.customAssessmentType : (s.assessmentType || '—');
       
       var lines = [
@@ -1180,9 +1213,9 @@ function buildPayload() {
        });
        dept.serviceDetails = ds.services.map(function (s) {
          var type = (s.type === 'Other' && s.customTypeName) ? s.customTypeName : s.type;
-         var regulator = (s.regulator === 'Other' && s.customRegulator) ? s.customRegulator : s.regulator;
-         var assessmentType = (s.assessmentType === 'Other' && s.customAssessmentType) ? s.customAssessmentType : s.assessmentType;
-         return { type: type, regulator: regulator || '', assessmentType: assessmentType || '' };
+          var regulator = (s.regulator || []).indexOf('Other') !== -1 && s.customRegulator ? s.customRegulator : (s.regulator || []).join(', ');
+          var assessmentType = (s.assessmentType === 'Other' && s.customAssessmentType) ? s.customAssessmentType : s.assessmentType;
+          return { type: type, regulator: regulator || '', assessmentType: assessmentType || '' };
        });
        dept.scope = formatServiceScopeText('grc', ds.services);
      } else if (kind === 'training') {
