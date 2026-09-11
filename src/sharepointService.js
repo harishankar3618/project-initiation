@@ -1,5 +1,5 @@
 const { SITE_URL, LIST_NAMES, CLIENT_FIELD_CANDIDATES, PROJECT_FIELD_CANDIDATES, MAIN_TRACKER_FIELDS, MAIN_TRACKER_FIELDS_FALLBACK, DEFAULT_STATUS, CLIENT_INITIATION_STATUS } = require('./config');
-const { graphGet, graphGetAll, graphPost, graphPatch, mapGraphUser, uploadAttachmentToSharePointItem } = require('./graphClient');
+const { graphGet, graphGetAll, graphPost, graphPatch, mapGraphUser, resolveDocumentsDrive, uploadAttachmentToSharePointItem } = require('./graphClient');
 const metadata = require('./metadata');
 
 function normalizeText(value) {
@@ -514,6 +514,7 @@ async function initiateProject(payload, attachments) {
 
   const result = { created: [], errors: [], warnings: [], sent: [], skipped: [] };
   const departments = payload.departments || [];
+  let documentsDrive = null;
 
   // Hold a per-client lock so two concurrent /api/initiate clicks cannot both
   // pass the "already initiated?" check and create duplicate Main Tracker
@@ -551,11 +552,18 @@ async function initiateProject(payload, attachments) {
 
         const deptAttachments = Array.isArray(attachments[deptName]) ? attachments[deptName] : [];
         if (deptAttachments.length) {
+          let driveError = null;
+          try {
+            if (!documentsDrive) documentsDrive = await resolveDocumentsDrive(ctx.site.id);
+          } catch (error) {
+            driveError = error;
+          }
           console.log('[Initiate] Department', deptName, 'item created:', createdItem.id, '- uploading', deptAttachments.length, 'attachment(s)');
           for (let a = 0; a < deptAttachments.length; a += 1) {
             const file = deptAttachments[a];
             try {
-              const uploaded = await uploadAttachmentToSharePointItem(SITE_URL, listId, createdItem.id, file);
+              if (driveError) throw driveError;
+              const uploaded = await uploadAttachmentToSharePointItem(documentsDrive, createdItem.id, file);
               attachmentResult.uploaded.push(uploaded);
               console.log('[Attachment] Upload succeeded:', deptName, '/', uploaded.name);
             } catch (attErr) {
@@ -578,7 +586,12 @@ async function initiateProject(payload, attachments) {
       }
 
       if (createdItem && (attachmentResult.uploaded.length || attachmentResult.failed.length)) {
-        createdItem.attachments = attachmentResult;
+        createdItem.attachments = {
+          mainTrackerId: String(createdItem.id),
+          attachmentsFolderUrl: attachmentResult.uploaded[0] && attachmentResult.uploaded[0].attachmentsFolderUrl || (documentsDrive && documentsDrive.itemFolderUrls && documentsDrive.itemFolderUrls[String(createdItem.id)]) || '',
+          uploaded: attachmentResult.uploaded,
+          failed: attachmentResult.failed
+        };
       }
     }
 

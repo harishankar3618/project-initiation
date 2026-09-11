@@ -90,11 +90,11 @@ app.use(cors({
 // Body parsing
 app.use(express.json({ limit: '1mb' }));
 
-// Attachment upload middleware: store files in memory (max 50 MB per file).
+// Attachment upload middleware: store files in memory (max 250 MB per file).
 // Files are keyed as `files[<department>]` from the frontend FormData.
 const attachmentUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 }
+  limits: { fileSize: 250 * 1024 * 1024 }
 });
 
 // Request logging
@@ -210,10 +210,16 @@ app.post('/api/initiate', attachmentUpload.any(), async function (req, res) {
       return res.status(400).json({ error: 'Invalid payload: departments array required.', savedCount: 0 });
     }
     const result = await initiateProject(payload, attachments);
+    const attachmentFailures = result.created.some(function (item) {
+      return item.attachments && item.attachments.failed && item.attachments.failed.length;
+    });
     res.setHeader('Cache-Control', 'no-store');
     res.json({
       ok: result.errors.length === 0,
+      partial: attachmentFailures,
+      savedCount: result.created.length,
       created: result.created,
+      attachmentFailures: attachmentFailures,
       errors: result.errors,
       warnings: result.warnings,
       sent: result.sent,

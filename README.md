@@ -190,7 +190,7 @@ Response:
 | GET | `/api/metadata` | Portal metadata |
 | GET | `/api/users` | Search users |
 | GET | `/api/bootstrap` | Load SharePoint data |
-| POST | `/api/initiate` | Create Main Tracker items. Accepts `application/json` (no attachments) or `multipart/form-data` (with attachments). When sending attachments, include a `payload` form field containing the JSON-stringified project payload, and files as `files[<departmentName>][<index>]` form fields. Each file is limited to 50 MB. |
+| POST | `/api/initiate` | Create Main Tracker items. Accepts `application/json` (no attachments) or `multipart/form-data` (with attachments). When sending attachments, include a `payload` form field containing the JSON-stringified project payload, and files as `files[<departmentName>][<index>]` form fields. Each file is limited to 250 MB. |
 
 ## Troubleshooting
 
@@ -271,47 +271,34 @@ pm2 restart project-initiation
 The Azure AD app registration requires:
 
 - Microsoft Graph `Sites.ReadWrite.All` — Read/write SharePoint lists and items
-- SharePoint `Sites.ReadWrite.All` — Upload list-item attachments through SharePoint REST
 - `User.Read.All` — Search users for the people picker
 
 ## Attachments
 
-Each department card in the Project Initiation form has an optional **Attachments** section. Users can select zero or more files (up to 50 MB each). Files are never placed into the JSON payload; instead they are transferred as `multipart/form-data` alongside the project payload when the user clicks **Initiate**.
+Each department card in the Project Initiation form has an optional **Attachments** section. Users can select zero or more files (up to 250 MB each). Files are never placed into the JSON payload; instead they are transferred as `multipart/form-data` alongside the project payload when the user clicks **Initiate**.
 
 ### How it works
 
 1. **Frontend** — The user selects files per department. File metadata (name, size, MIME type) is stored in `state.depts[name].attachments`. Raw `File` objects stay in browser memory only.
 2. **Transport** — If any department has attachments, the initiation request switches to `multipart/form-data`. The JSON payload is sent as a `payload` form field. Files are sent as `files[<departmentName>][<index>]` form fields.
 3. **Backend** — `server.js` uses `multer` (memory storage) to parse the multipart request, extracts the payload JSON, and groups files by department name.
-4. **SharePoint** — For each department, a Main Tracker list item is created first. Its returned `id` is then used to upload each attachment through the SharePoint REST `AttachmentFiles/add` endpoint.
+4. **SharePoint Documents** — For each department, a Main Tracker list item is created first. Its returned `id` is then used as the folder name under `Documents/Attachments/{id}/`.
 5. **Response** — Per-department attachment results (uploaded/failed) are included in the API response. If an attachment fails, the Main Tracker item is **not** deleted; a warning is returned instead.
 
-### SharePoint list attachment API
+### SharePoint Documents upload
 
-Microsoft Graph list items do not expose the Outlook-style `attachments` endpoint used by the original implementation. The implementation uses SharePoint REST instead:
+Native SharePoint list attachments are not used. The implementation resolves the site's default **Documents** drive through Microsoft Graph, then creates or reuses these folders:
 
 ```
-POST {sharepoint-site-url}/_api/web/lists(guid'{list-id}')/items({item-id})/AttachmentFiles/add(FileName='{file-name}')
+Documents/Attachments/{main-tracker-item-id}/{file-name}
 ```
 
-Request body:
-```json
-{
-  "item": {
-    "attachmentType": "file",
-    "name": "example.pdf"
-  }
-}
-```
-
-The response contains an `uploadUrl`. The file bytes are then PUT to that URL with `Content-Type` set to the file's MIME type and `Content-Length` set to the file size in bytes.
-
-**Limits**: Single-request upload session; files up to 50 MB are supported. Larger files would require chunked upload, which is not currently implemented.
+Files up to 4 MB use Graph simple upload. Larger files use a 10 MB chunked upload session, with a 250 MB request limit. Existing names are preserved, and collisions use `name (1).ext`, `name (2).ext`, and so on without overwriting existing files.
 
 ### File size enforcement
 
-- **Frontend**: Files exceeding 50 MB are rejected with a clear error message before submission.
-- **Backend**: `graphClient.js` enforces `ATTACHMENT_MAX_BYTES = 50 * 1024 * 1024` before creating the upload session, returning a 400-level error if exceeded.
+- **Frontend**: Files exceeding 250 MB are rejected with a clear error message before submission.
+- **Backend**: `multer` and `graphClient.js` enforce a 250 MB per-file limit.
 - Empty files (0 bytes) are rejected by both frontend and backend.
 
 ### Partial failure behavior

@@ -936,13 +936,13 @@ function renderGeneral(name) {
 // Files are kept in JS state only. The raw File objects never enter JSON.
 // Attachment metadata (name/size/type) is what flows into the payload and
 // review output. Actual bytes go to the backend via FormData on initiate.
-var MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024; // 50 MB — matches Graph/SharePoint limit enforced server-side.
+var MAX_ATTACHMENT_BYTES = 250 * 1024 * 1024; // 250 MB — matches the backend validation limit.
 
 function renderAttachments(name) {
   var ds = state.depts[name];
   var wrap = el('div', { class: 'attachments-section' });
   wrap.appendChild(el('div', { class: 'attachments-head', text: 'Attachments (Optional)' }));
-  wrap.appendChild(el('div', { class: 'attachments-hint', text: 'Supporting documents for this department. Max 50 MB per file.' }));
+  wrap.appendChild(el('div', { class: 'attachments-hint', text: 'Supporting documents for this department. Max 250 MB per file.' }));
 
   var files = ds.attachments || [];
   if (files.length) {
@@ -1237,6 +1237,8 @@ function renderReview() {
           var lastA = ai === atts.length - 1;
           html += '<div>' + dPipe + '    ' + (lastA ? '└── ' : '├── ') + '📎 ' + aTxt + '</div>';
         });
+      } else {
+        html += '<div>' + dPipe + '└── <span style="color:#475569;">Attachments: None</span></div>';
       }
     });
   }
@@ -1480,12 +1482,25 @@ async function initiateProject() {
         escapeHtml(data.warnings.map(function (w) { return '• ' + w.message; }).join('\n')) + '</div>';
     }
     var heading = res.ok
-      ? '<div class="json-actions" style="color:#10b981;font-weight:700;">✓ Saved ' + (data.created ? data.created.length : 0) + ' item(s) to Main Tracker</div>'
+      ? '<div class="json-actions" style="color:' + (data.partial ? '#f59e0b' : '#10b981') + ';font-weight:700;">' + (data.partial ? '⚠ Saved ' : '✓ Saved ') + (data.created ? data.created.length : 0) + ' item(s) to Main Tracker' + (data.partial ? '; some attachments failed' : '') + '</div>'
       : '<div class="json-actions" style="color:#ef4444;font-weight:700;">⚠ Save failed — ' + (data.message || 'Unknown error') + ' (' + (data.savedCount != null ? data.savedCount : 0) + ' item(s) saved)</div>' +
         (data.details && data.details.length ? '<div class="json-actions" style="color:#ef4444;font-weight:600;margin-top:4px;">Failed departments:</div>' +
           '<div style="white-space:pre-wrap;color:#b45309;">' + escapeHtml(data.details.map(function (d) { return '• ' + d.department + ': ' + d.message; }).join('\n')) + '</div>' : '');
+    var attachmentSummary = '';
+    if (res.ok && data.created && data.created.length) {
+      attachmentSummary = '<div class="json-actions" style="margin-top:0.5rem;">' + data.created.map(function (item) {
+        var details = item.attachments || {};
+        var uploaded = details.uploaded || [];
+        var failed = details.failed || [];
+        var dept = item.fields && item.fields.Department ? item.fields.Department : 'Department';
+        var folder = details.attachmentsFolderUrl ? ' <a href="' + escapeHtml(details.attachmentsFolderUrl) + '" target="_blank" rel="noopener">Open Attachments</a>' : '';
+        var status = uploaded.length ? uploaded.length + ' uploaded' : 'None';
+        if (failed.length) status += ', ' + failed.length + ' failed';
+        return '<div><strong>' + escapeHtml(dept) + '</strong> — Main Tracker ID: ' + escapeHtml(String(item.id || '')) + ' — Attachments: ' + escapeHtml(status) + folder + '</div>';
+      }).join('') + '</div>';
+    }
     var jsonStr = JSON.stringify(data, null, 2);
-    elOut.innerHTML = heading + warningsHtml + '<div id="jsonText" style="white-space:pre-wrap;">' + escapeHtml(jsonStr) + '</div>';
+    elOut.innerHTML = heading + attachmentSummary + warningsHtml + '<div id="jsonText" style="white-space:pre-wrap;">' + escapeHtml(jsonStr) + '</div>';
     elOut.classList.add('visible');
     if (res.ok && data.created && data.created.length && payload.client && payload.client.id) {
       updateLocalInitiatedState(payload.client, payload.departments);
