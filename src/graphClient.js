@@ -6,6 +6,11 @@ const GRAPH_RETRY_DELAY_BASE = 1000;
 const GRAPH_TIMEOUT = 60000;
 const ATTACHMENT_MAX_BYTES = 50 * 1024 * 1024;
 
+function graphPath() {
+  var args = Array.prototype.slice.call(arguments, 0);
+  return '/' + args.map(function (s) { return encodeURIComponent(s); }).join('/');
+}
+
 async function sleep(ms) {
   return new Promise(function (resolve) { setTimeout(resolve, ms); });
 }
@@ -157,10 +162,8 @@ async function createAttachmentUploadSession(siteId, listId, itemId, fileName, f
     }
   };
 
-  const payload = await graphPost(
-    '/sites/' + siteId + '/lists/' + listId + '/items/' + itemId + '/attachments/createUploadSession',
-    sessionBody
-  );
+  const relativeUrl = graphPath('sites', siteId, 'lists', listId, 'items', itemId, 'attachments', 'createUploadSession');
+  const payload = await graphPost(relativeUrl, sessionBody);
 
   if (!payload || !payload.uploadUrl) {
     throw new Error('Graph did not return an upload URL for attachment: ' + fileName);
