@@ -4,11 +4,16 @@ const GRAPH_BASE = 'https://graph.microsoft.com/v1.0';
 const GRAPH_RETRIES = 3;
 const GRAPH_RETRY_DELAY_BASE = 1000;
 const GRAPH_TIMEOUT = 60000;
-const ATTACHMENT_MAX_BYTES = 50 * 1024 * 1024;
+const ATTACHMENT_MAX_BYTES = 4 * 1024 * 1024;
 
 function graphPath() {
-  var args = Array.prototype.slice.call(arguments, 0);
-  return '/' + args.map(function (s) { return encodeURIComponent(s); }).join('/');
+  const args = Array.prototype.slice.call(arguments, 0);
+  return '/' + args.map(function (segment) {
+    const value = String(segment);
+    const queryIndex = value.indexOf('?');
+    if (queryIndex === -1) return encodeURIComponent(value);
+    return encodeURIComponent(value.slice(0, queryIndex)) + value.slice(queryIndex);
+  }).join('/');
 }
 
 async function sleep(ms) {
@@ -150,58 +155,25 @@ async function graphGetAll(relativeUrl) {
   return items;
 }
 
-async function createAttachmentUploadSession(siteId, listId, itemId, fileName, fileSize, contentType) {
-  if (fileSize > ATTACHMENT_MAX_BYTES) {
+async function createAttachmentUploadSession(siteId, listId, itemId, fileName, fileBuffer, contentType) {
+  if (fileBuffer.length > ATTACHMENT_MAX_BYTES) {
     throw new Error('File "' + fileName + '" exceeds the maximum allowed size of ' + (ATTACHMENT_MAX_BYTES / 1024 / 1024) + ' MB.');
   }
 
+  const base64 = fileBuffer.toString('base64');
   const sessionBody = {
-    item: {
-      attachmentType: 'file',
-      name: fileName
-    }
+    '@odata.type': 'microsoft.graph.fileAttachment',
+    name: fileName,
+    contentType: contentType || 'application/octet-stream',
+    contentBytes: base64
   };
 
-  const relativeUrl = graphPath('sites', siteId, 'lists', listId, 'items', itemId, 'attachments', 'createUploadSession');
-  const payload = await graphPost(relativeUrl, sessionBody);
+  const payload = await graphPost(
+    graphPath('sites', siteId, 'lists', listId, 'items', itemId, 'attachments'),
+    sessionBody
+  );
 
-  if (!payload || !payload.uploadUrl) {
-    throw new Error('Graph did not return an upload URL for attachment: ' + fileName);
-  }
-
-  return payload.uploadUrl;
-}
-
-async function streamBytesToUploadUrl(uploadUrl, buffer, fileName, contentType) {
-  const headers = {
-    'Content-Type': contentType || 'application/octet-stream',
-    'Content-Length': String(Buffer.isBuffer(buffer) ? buffer.length : buffer.byteLength)
-  };
-
-  const controller = new AbortController();
-  const timeout = setTimeout(function () { controller.abort(); }, GRAPH_TIMEOUT);
-  let response;
-  try {
-    response = await fetch(uploadUrl, {
-      method: 'PUT',
-      headers: headers,
-      body: buffer,
-      signal: controller.signal
-    });
-  } catch (error) {
-    clearTimeout(timeout);
-    if (error.name === 'AbortError') {
-      throw new Error('Attachment upload for "' + fileName + '" timed out after ' + GRAPH_TIMEOUT + 'ms.');
-    }
-    throw error;
-  }
-  clearTimeout(timeout);
-
-  if (!response.ok) {
-    const text = await response.text();
-    const msg = text || ('HTTP ' + response.status);
-    throw new Error('Graph attachment upload failed for "' + fileName + '": ' + msg);
-  }
+  return payload;
 }
 
 async function uploadAttachmentToSharePointItem(siteId, listId, itemId, file) {
@@ -213,6 +185,10 @@ async function uploadAttachmentToSharePointItem(siteId, listId, itemId, file) {
     throw new Error('File "' + fileName + '" is empty (0 bytes).');
   }
 
+  if (fileSize > ATTACHMENT_MAX_BYTES) {
+    throw new Error('File "' + fileName + '" exceeds the maximum allowed size of ' + Math.round(ATTACHMENT_MAX_BYTES / 1024 / 1024) + ' MB.');
+  }
+
   let buffer;
   if (typeof Buffer !== 'undefined' && Buffer.isBuffer(file.buffer)) {
     buffer = file.buffer;
@@ -222,8 +198,7 @@ async function uploadAttachmentToSharePointItem(siteId, listId, itemId, file) {
     throw new Error('Unsupported file object for attachment upload: ' + fileName);
   }
 
-  const uploadUrl = await createAttachmentUploadSession(siteId, listId, itemId, fileName, fileSize, contentType);
-  await streamBytesToUploadUrl(uploadUrl, buffer, fileName, contentType);
+  await createAttachmentUploadSession(siteId, listId, itemId, fileName, buffer, contentType);
   return { name: fileName, size: fileSize, type: contentType };
 }
 
@@ -242,7 +217,6 @@ module.exports = {
   mapGraphUser,
   toPerson,
   createAttachmentUploadSession,
-  streamBytesToUploadUrl,
   uploadAttachmentToSharePointItem,
   ATTACHMENT_MAX_BYTES
 };

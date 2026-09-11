@@ -2,16 +2,18 @@ const { SITE_URL, LIST_NAMES, CLIENT_FIELD_CANDIDATES, PROJECT_FIELD_CANDIDATES,
 const { graphGet, graphGetAll, graphPost, graphPatch, mapGraphUser, uploadAttachmentToSharePointItem } = require('./graphClient');
 const metadata = require('./metadata');
 
-function graphUrl(parts) {
-  var encoded = parts.map(function (s) {
-    if (typeof s === 'string' && s.charAt(0) === '?') return s;
-    return encodeURIComponent(s);
-  });
-  return '/' + encoded.join('/');
-}
-
 function normalizeText(value) {
   return String(value == null ? '' : value).trim();
+}
+
+function graphUrl() {
+  const args = Array.prototype.slice.call(arguments, 0);
+  return '/' + args.map(function (segment) {
+    const value = String(segment);
+    const queryIndex = value.indexOf('?');
+    if (queryIndex === -1) return encodeURIComponent(value);
+    return encodeURIComponent(value.slice(0, queryIndex)) + value.slice(queryIndex);
+  }).join('/');
 }
 
 function toIsoDateTime(value) {
@@ -67,7 +69,8 @@ async function resolveSharePointPerson(lookupId, displayName, siteId) {
     return displayName ? { id: '', name: displayName, email: '', claims: '' } : null;
   }
   try {
-    const relativeUrl = graphUrl(['sites', siteId, "lists('User Information List')", 'items', lookupId, '?$expand=fields($select=Title,EMail,Name,UserName)']);
+     const relativeUrl = graphUrl('sites', siteId, "lists('User Information List')", 'items', lookupId) +
+       '?$expand=fields($select=Title,EMail,Name,UserName)';
     const item = await graphGet(relativeUrl);
     const f = item.fields || {};
     const email = normalizeText(f.EMail);
@@ -98,7 +101,7 @@ async function resolveSiteAndLists() {
   const sitePath = siteUrl.pathname.replace(/\/$/, '');
   const encodedSitePath = encodeURIComponent(sitePath);
   const site = await graphGet('/sites/' + siteUrl.hostname + ':' + encodedSitePath);
-  const lists = await graphGetAll(graphUrl(['sites', site.id, 'lists', { '$select': 'id,displayName,webUrl' }]));
+  const lists = await graphGetAll(graphUrl('sites', site.id, 'lists?$select=id,displayName,webUrl'));
 
   function findByPreferredNames(preferredNames) {
     for (let i = 0; i < preferredNames.length; i += 1) {
@@ -142,7 +145,7 @@ async function loadClients(siteId, listId) {
   const columnInfo = await getClientColumns();
   const columnMap = columnInfo.columns || {};
   const select = buildClientSelect(columnMap);
-  const items = await graphGetAll(graphUrl(['sites', siteId, 'lists', listId, 'items', { '$expand': 'fields($select=' + select + ')', '$top': 200 }]));
+  const items = await graphGetAll(graphUrl('sites', siteId, 'lists', listId, 'items?$expand=fields($select=' + select + ')&$top=200'));
 
   const parsed = items.map(function (item) {
     return parseClientItem(item.fields || {}, item.id, columnMap);
@@ -157,7 +160,7 @@ async function loadClients(siteId, listId) {
 
 async function loadInitiatedDepartments(siteId, listId) {
   if (!listId) return {};
-  const items = await graphGetAll(graphUrl(['sites', siteId, 'lists', listId, 'items', { '$expand': 'fields', '$top': 500 }]));
+  const items = await graphGetAll(graphUrl('sites', siteId, 'lists', listId, 'items?$expand=fields&$top=500'));
   const map = {};
   console.log('[InitiationDebug] Loading initiated departments from Main Tracker — total items:', items.length);
 
@@ -236,7 +239,7 @@ const SYSTEM_COLUMN_NAMES = new Set([
 async function getListColumns(siteId, listId) {
   if (!listId) return { columns: {}, choiceColumns: {} };
   const columns = await graphGetAll(
-    graphUrl(['sites', siteId, 'lists', listId, 'columns', { '$select': 'name,displayName,readOnly' }])
+    graphUrl('sites', siteId, 'lists', listId, 'columns?$select=name,displayName,readOnly')
   );
   const map = {};
   const choices = {};
@@ -289,10 +292,9 @@ async function getSharePointUserIdByEmail(siteId, email) {
   const key = String(email).toLowerCase();
   if (sharePointUserCache[key] !== undefined) return sharePointUserCache[key];
   try {
-    const encodedSiteId = encodeURIComponent(siteId);
-    const safeEmail = String(email).replace(/'/g, "''");
-    const relativeUrl = '/sites/' + encodedSiteId + "/lists('User Information List')/items?$select=id,EMail&$filter=EMail eq '" + safeEmail + "'";
-    const items = await graphGetAll(relativeUrl);
+    const items = await graphGetAll(
+      graphUrl('sites', siteId, "lists('User Information List')", "items?$select=id,EMail&$filter=EMail eq '" + String(email).replace(/'/g, "''") + "'" )
+    );
     const id = items.length ? String(items[0].id) : '';
     sharePointUserCache[key] = id;
     return id;
@@ -407,7 +409,7 @@ async function buildMainTrackerItem(payload, dept, columns, choiceColumns, siteI
     }
     let exists = true;
     try {
-      await graphGet(graphUrl(['sites', siteId, "lists('User Information List')", 'items', id, '?$select=id']));
+      await graphGet(graphUrl('sites', siteId, "lists('User Information List')", 'items', id) + '?$select=id');
     } catch (e) {
       exists = false;
     }
@@ -542,7 +544,7 @@ async function initiateProject(payload, attachments) {
         built.warnings.forEach(function (w) { result.warnings.push({ department: dept.department, message: w }); });
         result.sent.push({ department: dept.department, fields: attemptedFields });
         createdItem = await graphPost(
-          graphUrl(['sites', ctx.site.id, 'lists', listId, 'items']),
+          graphUrl('sites', ctx.site.id, 'lists', listId, 'items'),
           { fields: attemptedFields }
         );
         result.created.push(createdItem);
@@ -646,7 +648,7 @@ async function buildBootstrap() {
 
 async function getClientInitiationProgress(siteId, intakeListId, client) {
   if (!intakeListId || !client) return null;
-  const items = await graphGetAll(graphUrl(['sites', siteId, 'lists', intakeListId, 'items', { '$expand': 'fields', '$top': 500 }]));
+  const items = await graphGetAll(graphUrl('sites', siteId, 'lists', intakeListId, 'items?$expand=fields&$top=500'));
   const clientKeys = [
     String(client.id || ''),
     String(client.trackingId || ''),
@@ -730,7 +732,7 @@ async function updateClientMasterProgress(siteId, clientsListId, client, progres
     return null;
   }
   const res = await graphPatch(
-    graphUrl(['sites', siteId, 'lists', clientsListId, 'items', client.id]),
+    graphUrl('sites', siteId, 'lists', clientsListId, 'items', client.id),
     { fields: { [internalName]: progressText } }
   );
   return res;
@@ -755,7 +757,7 @@ async function updateClientMasterInitiationStatus(siteId, clientsListId, client,
   console.log('[InitiationDebug] Updating client', client.clientName, '(id:', client.id, ') Initiation Status to', statusValue, '- total:', total, 'count:', count);
 
   const res = await graphPatch(
-    graphUrl(['sites', siteId, 'lists', clientsListId, 'items', client.id]),
+    graphUrl('sites', siteId, 'lists', clientsListId, 'items', client.id),
     { fields: { [internalName]: statusValue } }
   );
   console.log('[InitiationDebug] Update result for client', client.clientName, ':', res ? 'success' : 'failed');
