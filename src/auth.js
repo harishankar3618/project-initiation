@@ -2,6 +2,8 @@ const TOKEN_ENDPOINT_TEMPLATE = 'https://login.microsoftonline.com/{tenantId}/oa
 
 let cachedToken = null;
 let refreshPromise = null;
+let cachedSharePointToken = null;
+let sharePointRefreshPromise = null;
 
 function getRequiredEnv(name) {
   const value = process.env[name];
@@ -56,6 +58,52 @@ async function getAccessToken() {
   return refreshPromise;
 }
 
+async function getSharePointAccessToken(siteUrl) {
+  const now = Date.now();
+  if (cachedSharePointToken && cachedSharePointToken.expiresAt - 60000 > now) {
+    return cachedSharePointToken.token;
+  }
+
+  if (sharePointRefreshPromise) return sharePointRefreshPromise;
+
+  sharePointRefreshPromise = (async function () {
+    try {
+      const tenantId = getRequiredEnv('TENANT_ID');
+      const clientId = getRequiredEnv('CLIENT_ID');
+      const clientSecret = getRequiredEnv('CLIENT_SECRET');
+      const resource = new URL(siteUrl).origin;
+      const params = new URLSearchParams();
+      params.set('client_id', clientId);
+      params.set('client_secret', clientSecret);
+      params.set('grant_type', 'client_credentials');
+      params.set('scope', resource + '/.default');
+
+      const response = await fetch(TOKEN_ENDPOINT_TEMPLATE.replace('{tenantId}', tenantId), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error('Failed to acquire SharePoint token: ' + text);
+      }
+
+      const payload = await response.json();
+      cachedSharePointToken = {
+        token: payload.access_token,
+        expiresAt: now + ((payload.expires_in || 3599) * 1000)
+      };
+      return cachedSharePointToken.token;
+    } finally {
+      sharePointRefreshPromise = null;
+    }
+  })();
+
+  return sharePointRefreshPromise;
+}
+
 module.exports = {
-  getAccessToken
+  getAccessToken,
+  getSharePointAccessToken
 };

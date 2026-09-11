@@ -555,7 +555,7 @@ async function initiateProject(payload, attachments) {
           for (let a = 0; a < deptAttachments.length; a += 1) {
             const file = deptAttachments[a];
             try {
-              const uploaded = await uploadAttachmentToSharePointItem(ctx.site.id, listId, createdItem.id, file);
+              const uploaded = await uploadAttachmentToSharePointItem(SITE_URL, listId, createdItem.id, file);
               attachmentResult.uploaded.push(uploaded);
               console.log('[Attachment] Upload succeeded:', deptName, '/', uploaded.name);
             } catch (attErr) {

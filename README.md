@@ -270,7 +270,8 @@ pm2 restart project-initiation
 
 The Azure AD app registration requires:
 
-- `Sites.ReadWrite.All` — Read/write SharePoint lists (required for both item creation and attachment uploads)
+- Microsoft Graph `Sites.ReadWrite.All` — Read/write SharePoint lists and items
+- SharePoint `Sites.ReadWrite.All` — Upload list-item attachments through SharePoint REST
 - `User.Read.All` — Search users for the people picker
 
 ## Attachments
@@ -282,15 +283,15 @@ Each department card in the Project Initiation form has an optional **Attachment
 1. **Frontend** — The user selects files per department. File metadata (name, size, MIME type) is stored in `state.depts[name].attachments`. Raw `File` objects stay in browser memory only.
 2. **Transport** — If any department has attachments, the initiation request switches to `multipart/form-data`. The JSON payload is sent as a `payload` form field. Files are sent as `files[<departmentName>][<index>]` form fields.
 3. **Backend** — `server.js` uses `multer` (memory storage) to parse the multipart request, extracts the payload JSON, and groups files by department name.
-4. **SharePoint** — For each department, a Main Tracker list item is created first. Its returned `id` is then used to upload each attachment via the Microsoft Graph attachment upload session API.
+4. **SharePoint** — For each department, a Main Tracker list item is created first. Its returned `id` is then used to upload each attachment through the SharePoint REST `AttachmentFiles/add` endpoint.
 5. **Response** — Per-department attachment results (uploaded/failed) are included in the API response. If an attachment fails, the Main Tracker item is **not** deleted; a warning is returned instead.
 
-### Microsoft Graph attachment API
+### SharePoint list attachment API
 
-The implementation uses the official Microsoft Graph v1.0 attachment upload session endpoint:
+Microsoft Graph list items do not expose the Outlook-style `attachments` endpoint used by the original implementation. The implementation uses SharePoint REST instead:
 
 ```
-POST /sites/{site-id}/lists/{list-id}/items/{item-id}/attachments/createUploadSession
+POST {sharepoint-site-url}/_api/web/lists(guid'{list-id}')/items({item-id})/AttachmentFiles/add(FileName='{file-name}')
 ```
 
 Request body:

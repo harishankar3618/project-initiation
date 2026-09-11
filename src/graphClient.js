@@ -1,20 +1,10 @@
-const { getAccessToken } = require('./auth');
+const { getAccessToken, getSharePointAccessToken } = require('./auth');
 
 const GRAPH_BASE = 'https://graph.microsoft.com/v1.0';
 const GRAPH_RETRIES = 3;
 const GRAPH_RETRY_DELAY_BASE = 1000;
 const GRAPH_TIMEOUT = 60000;
 const ATTACHMENT_MAX_BYTES = 4 * 1024 * 1024;
-
-function graphPath() {
-  const args = Array.prototype.slice.call(arguments, 0);
-  return '/' + args.map(function (segment) {
-    const value = String(segment);
-    const queryIndex = value.indexOf('?');
-    if (queryIndex === -1) return encodeURIComponent(value);
-    return encodeURIComponent(value.slice(0, queryIndex)) + value.slice(queryIndex);
-  }).join('/');
-}
 
 async function sleep(ms) {
   return new Promise(function (resolve) { setTimeout(resolve, ms); });
@@ -155,28 +145,38 @@ async function graphGetAll(relativeUrl) {
   return items;
 }
 
-async function createAttachmentUploadSession(siteId, listId, itemId, fileName, fileBuffer, contentType) {
+async function uploadSharePointAttachment(siteUrl, listId, itemId, fileName, fileBuffer) {
+  const token = await getSharePointAccessToken(siteUrl);
+  const safeFileName = String(fileName).replace(/'/g, "''");
+  const url = String(siteUrl).replace(/\/$/, '') +
+    '/_api/web/lists(guid\'' + listId + '\')/items(' + itemId + ')/AttachmentFiles/add(FileName=\'' + encodeURIComponent(safeFileName) + '\')';
+  const response = await graphFetchWithRetry(url, {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + token,
+      Accept: 'application/json;odata=nometadata',
+      'Content-Type': 'application/octet-stream'
+    },
+    body: fileBuffer
+  }, 0);
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error('SharePoint attachment upload failed: ' + text);
+  }
+
+  return response.json();
+}
+
+async function createAttachmentUploadSession(siteUrl, listId, itemId, fileName, fileBuffer, contentType) {
   if (fileBuffer.length > ATTACHMENT_MAX_BYTES) {
     throw new Error('File "' + fileName + '" exceeds the maximum allowed size of ' + (ATTACHMENT_MAX_BYTES / 1024 / 1024) + ' MB.');
   }
 
-  const base64 = fileBuffer.toString('base64');
-  const sessionBody = {
-    '@odata.type': 'microsoft.graph.fileAttachment',
-    name: fileName,
-    contentType: contentType || 'application/octet-stream',
-    contentBytes: base64
-  };
-
-  const payload = await graphPost(
-    graphPath('sites', siteId, 'lists', listId, 'items', itemId, 'attachments'),
-    sessionBody
-  );
-
-  return payload;
+  return uploadSharePointAttachment(siteUrl, listId, itemId, fileName, fileBuffer, contentType);
 }
 
-async function uploadAttachmentToSharePointItem(siteId, listId, itemId, file) {
+async function uploadAttachmentToSharePointItem(siteUrl, listId, itemId, file) {
   const fileName = String(file.name || '').replace(/\\/g, '/').split('/').pop() || 'unnamed';
   const fileSize = Number(file.size || 0);
   const contentType = String(file.type || 'application/octet-stream');
@@ -198,7 +198,7 @@ async function uploadAttachmentToSharePointItem(siteId, listId, itemId, file) {
     throw new Error('Unsupported file object for attachment upload: ' + fileName);
   }
 
-  await createAttachmentUploadSession(siteId, listId, itemId, fileName, buffer, contentType);
+  await createAttachmentUploadSession(siteUrl, listId, itemId, fileName, buffer, contentType);
   return { name: fileName, size: fileSize, type: contentType };
 }
 
