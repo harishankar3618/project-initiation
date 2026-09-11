@@ -190,7 +190,7 @@ Response:
 | GET | `/api/metadata` | Portal metadata |
 | GET | `/api/users` | Search users |
 | GET | `/api/bootstrap` | Load SharePoint data |
-| POST | `/api/initiate` | Create Main Tracker items |
+| POST | `/api/initiate` | Create Main Tracker items. Accepts `application/json` (no attachments) or `multipart/form-data` (with attachments). When sending attachments, include a `payload` form field containing the JSON-stringified project payload, and files as `files[<departmentName>][<index>]` form fields. Each file is limited to 50 MB. |
 
 ## Troubleshooting
 
@@ -270,8 +270,95 @@ pm2 restart project-initiation
 
 The Azure AD app registration requires:
 
-- `Sites.ReadWrite.All` — Read/write SharePoint lists
+- `Sites.ReadWrite.All` — Read/write SharePoint lists (required for both item creation and attachment uploads)
 - `User.Read.All` — Search users for the people picker
+
+## Attachments
+
+Each department card in the Project Initiation form has an optional **Attachments** section. Users can select zero or more files (up to 50 MB each). Files are never placed into the JSON payload; instead they are transferred as `multipart/form-data` alongside the project payload when the user clicks **Initiate**.
+
+### How it works
+
+1. **Frontend** — The user selects files per department. File metadata (name, size, MIME type) is stored in `state.depts[name].attachments`. Raw `File` objects stay in browser memory only.
+2. **Transport** — If any department has attachments, the initiation request switches to `multipart/form-data`. The JSON payload is sent as a `payload` form field. Files are sent as `files[<departmentName>][<index>]` form fields.
+3. **Backend** — `server.js` uses `multer` (memory storage) to parse the multipart request, extracts the payload JSON, and groups files by department name.
+4. **SharePoint** — For each department, a Main Tracker list item is created first. Its returned `id` is then used to upload each attachment via the Microsoft Graph attachment upload session API.
+5. **Response** — Per-department attachment results (uploaded/failed) are included in the API response. If an attachment fails, the Main Tracker item is **not** deleted; a warning is returned instead.
+
+### Microsoft Graph attachment API
+
+The implementation uses the official Microsoft Graph v1.0 attachment upload session endpoint:
+
+```
+POST /sites/{site-id}/lists/{list-id}/items/{item-id}/attachments/createUploadSession
+```
+
+Request body:
+```json
+{
+  "item": {
+    "attachmentType": "file",
+    "name": "example.pdf"
+  }
+}
+```
+
+The response contains an `uploadUrl`. The file bytes are then PUT to that URL with `Content-Type` set to the file's MIME type and `Content-Length` set to the file size in bytes.
+
+**Limits**: Single-request upload session; files up to 50 MB are supported. Larger files would require chunked upload, which is not currently implemented.
+
+### File size enforcement
+
+- **Frontend**: Files exceeding 50 MB are rejected with a clear error message before submission.
+- **Backend**: `graphClient.js` enforces `ATTACHMENT_MAX_BYTES = 50 * 1024 * 1024` before creating the upload session, returning a 400-level error if exceeded.
+- Empty files (0 bytes) are rejected by both frontend and backend.
+
+### Partial failure behavior
+
+If attachment upload fails after the Main Tracker item is created:
+- The item remains in SharePoint.
+- A warning is returned: `"Main Tracker item saved, but attachment "X" could not be uploaded: <reason>"`
+- The frontend displays the warning in the output panel.
+- The user can retry by switching clients or resetting initiation (the item already exists; manual attachment upload may be needed for the failed file).
+
+### API contract
+
+**Request (multipart/form-data)**:
+```
+Content-Type: multipart/form-data; boundary=...
+
+payload: {"client":{...},"departments":[{"department":"SOC",...}],...}
+files[SOC][0]: <binary>  (field name: files[SOC][0])
+files[SOC][1]: <binary>  (field name: files[SOC][1])
+files[GRC][0]: <binary>  (field name: files[GRC][0])
+```
+
+**Request (application/json, no attachments)**:
+```
+Content-Type: application/json
+
+{"payload":{"client":{...},"departments":[...]}}
+```
+
+**Response**:
+```json
+{
+  "ok": true,
+  "created": [
+    {
+      "id": "123",
+      "fields": {...},
+      "attachments": {
+        "uploaded": [{"name":"file.pdf","size":1234,"type":"application/pdf"}],
+        "failed": []
+      }
+    }
+  ],
+  "warnings": [],
+  "errors": [],
+  "sent": [...]
+}
+```
 
 ## Power Automate Integration
 

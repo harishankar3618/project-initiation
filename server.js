@@ -6,6 +6,7 @@ const helmet = require('helmet');
 const compression = require('compression');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
+const multer = require('multer');
 require('dotenv').config();
 
 const { buildBootstrap, initiateProject } = require('./src/sharepointService');
@@ -89,6 +90,13 @@ app.use(cors({
 // Body parsing
 app.use(express.json({ limit: '1mb' }));
 
+// Attachment upload middleware: store files in memory (max 50 MB per file).
+// Files are keyed as `files[<department>]` from the frontend FormData.
+const attachmentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 }
+});
+
 // Request logging
 if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('combined', {
@@ -160,16 +168,57 @@ app.get('/api/bootstrap', async function (_req, res) {
   }
 });
 
-// Create Main Tracker items per department
-app.post('/api/initiate', async function (req, res) {
-  const payload = req.body && req.body.payload ? req.body.payload : req.body;
+// Create Main Tracker items per department. Accepts both application/json and
+// multipart/form-data. When multipart is used, the form field `payload` must
+// contain the JSON-stringified project payload, and files are grouped under
+// `files[<departmentName>]` field names (multiple files per department).
+app.post('/api/initiate', attachmentUpload.any(), async function (req, res) {
+  let payload;
+  let attachments = {};
+
+  try {
+    if (req.is('multipart/form-data') || (req.files && req.files.length)) {
+      const rawPayload = req.body && req.body.payload;
+      if (!rawPayload || typeof rawPayload !== 'string') {
+        return res.status(400).json({ error: 'Invalid multipart payload: "payload" form field containing JSON is required.' });
+      }
+      payload = JSON.parse(rawPayload);
+
+      (req.files || []).forEach(function (f) {
+        if (!f.fieldname || f.fieldname.indexOf('files[') !== 0) return;
+        var deptMatch = f.fieldname.match(/^files\[([^\]]+)\](?:\[\d+\])?$/);
+        if (!deptMatch) return;
+        var deptName = deptMatch[1];
+        if (!attachments[deptName]) attachments[deptName] = [];
+        attachments[deptName].push({
+          name: f.originalname,
+          size: f.size,
+          type: f.mimetype,
+          buffer: f.buffer
+        });
+      });
+    } else {
+      payload = req.body && req.body.payload ? req.body.payload : req.body;
+      attachments = {};
+    }
+  } catch (parseErr) {
+    return res.status(400).json({ error: 'Invalid request: ' + (parseErr.message || 'Malformed payload.'), savedCount: 0 });
+  }
+
   try {
     if (!payload || !Array.isArray(payload.departments) || !payload.departments.length) {
-      return res.status(400).json({ error: 'Invalid payload: departments array required.' });
+      return res.status(400).json({ error: 'Invalid payload: departments array required.', savedCount: 0 });
     }
-    const result = await initiateProject(payload);
+    const result = await initiateProject(payload, attachments);
     res.setHeader('Cache-Control', 'no-store');
-    res.json({ ok: result.errors.length === 0, created: result.created, errors: result.errors, warnings: result.warnings, sent: result.sent, payload: payload });
+    res.json({
+      ok: result.errors.length === 0,
+      created: result.created,
+      errors: result.errors,
+      warnings: result.warnings,
+      sent: result.sent,
+      payload: payload
+    });
   } catch (error) {
     const details = error.details || [];
     const errMsg = error.message || 'An unexpected error occurred.';

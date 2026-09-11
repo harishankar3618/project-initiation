@@ -86,7 +86,21 @@
 .csif-app .btn-add-other:hover { border-color: #3b82f6; color: #3b82f6; }
 .csif-app .btn-remove-other { background: none; border: none; color: #ef4444; cursor: pointer; font-size: 1rem; padding: 0 0.25rem; }
 .csif-app .empty-hint { color: #94a3b8; font-size: 0.9rem; padding: 0.5rem 0; }
-.csif-app .btn-row { display: flex; justify-content: space-between; margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #e2e8f0; }
+.csif-app .attachments-section { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #e2e8f0; }
+.csif-app .attachments-head { font-size: 0.82rem; font-weight: 700; color: #334155; margin-bottom: 0.2rem; }
+.csif-app .attachments-hint { color: #64748b; font-size: 0.75rem; margin-bottom: 0.5rem; }
+.csif-app .attachments-input { display: none; }
+.csif-app .btn-add-attachments { background: none; border: 1px dashed #94a3b8; color: #64748b; border-radius: 6px; padding: 0.3rem 0.75rem; font-size: 0.78rem; cursor: pointer; margin-bottom: 0.5rem; }
+.csif-app .btn-add-attachments:hover { border-color: #3b82f6; color: #3b82f6; }
+.csif-app .attachments-list { display: flex; flex-direction: column; gap: 0.3rem; }
+.csif-app .attachment-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0.5rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.8rem; }
+.csif-app .attachment-icon { font-size: 0.85rem; flex-shrink: 0; }
+.csif-app .attachment-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #1e293b; font-weight: 500; }
+.csif-app .attachment-size { color: #64748b; font-size: 0.75rem; flex-shrink: 0; }
+.csif-app .attachment-remove { color: #ef4444; cursor: pointer; font-size: 1rem; line-height: 1; padding: 0 0.2rem; flex-shrink: 0; background: none; border: none; }
+.csif-app .attachment-remove:hover { color: #b91c1c; }
+.csif-app .attachment-error { color: #ef4444; font-size: 0.75rem; margin-top: 0.25rem; }
+@media (max-width: 640px) { .csif-wrapper { padding: 1rem; } .csif-app .form-grid, .csif-app .scope-grid { grid-template-columns: 1fr; } .csif-app .step-indicator { display: none; } }
 .csif-app .btn { padding: 0.6rem 1.5rem; border: none; border-radius: 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; }
 .csif-app .btn-primary { background: #3b82f6; color: white; }
 .csif-app .btn-primary:hover { background: #2563eb; }
@@ -205,7 +219,8 @@ function emptyDeptState() {
     collapsed: false,
     general: { pm: null, priority: '', remarks: '' },
     vapt: { projectType: '', sow: [createEmptySowRow()] },
-    services: []   // SOC/GRC/Training: [{ type, mode?, regulator?, assessmentType?, scope?, customTypeName?, customAssessmentType?, customRegulator? }]
+    services: [],
+    attachments: []
   };
 }
 
@@ -549,6 +564,7 @@ function renderDepartmentCards() {
     if (kind === 'vapt') body.appendChild(renderVapt(name));
     else body.appendChild(renderProjectType(name, kind));
     body.appendChild(renderGeneral(name));
+    body.appendChild(renderAttachments(name));
     card.appendChild(body);
     container.appendChild(card);
   });
@@ -915,6 +931,120 @@ function renderGeneral(name) {
   wrap.appendChild(grid);
   return wrap;
 }
+
+// ---- Attachments (optional, per department) ----
+// Files are kept in JS state only. The raw File objects never enter JSON.
+// Attachment metadata (name/size/type) is what flows into the payload and
+// review output. Actual bytes go to the backend via FormData on initiate.
+var MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024; // 50 MB — matches Graph/SharePoint limit enforced server-side.
+
+function renderAttachments(name) {
+  var ds = state.depts[name];
+  var wrap = el('div', { class: 'attachments-section' });
+  wrap.appendChild(el('div', { class: 'attachments-head', text: 'Attachments (Optional)' }));
+  wrap.appendChild(el('div', { class: 'attachments-hint', text: 'Supporting documents for this department. Max 50 MB per file.' }));
+
+  var files = ds.attachments || [];
+  if (files.length) {
+    var list = el('div', { class: 'attachments-list' });
+    files.forEach(function (f, idx) {
+      var sizeStr = formatBytes(f.size);
+      var ext = (f.name || '').split('.').pop().toLowerCase();
+      var icon = getFileIcon(ext);
+      var row = el('div', { class: 'attachment-item' }, [
+        el('span', { class: 'attachment-icon', text: icon }),
+        el('span', { class: 'attachment-name', text: f.name, title: f.name }),
+        el('span', { class: 'attachment-size', text: sizeStr }),
+        el('button', { class: 'attachment-remove', text: '×', title: 'Remove ' + f.name, onclick: function () { removeAttachment(name, idx); } })
+      ]);
+      list.appendChild(row);
+    });
+    wrap.appendChild(list);
+  }
+
+  var fileInput = el('input', {
+    type: 'file',
+    class: 'attachments-input',
+    multiple: true,
+    id: 'att-input-' + slug(name),
+    onchange: function () { handleAttachmentSelect(name, this.files); this.value = ''; }
+  });
+  wrap.appendChild(fileInput);
+
+  var addBtn = el('button', { class: 'btn-add-attachments', text: '+ Add Attachments', onclick: function () { document.getElementById('att-input-' + slug(name)).click(); } });
+  wrap.appendChild(addBtn);
+
+  var errEl = el('div', { class: 'attachment-error', id: 'att-err-' + slug(name), style: 'display:none;' });
+  wrap.appendChild(errEl);
+
+  return wrap;
+}
+
+function handleAttachmentSelect(name, fileList) {
+  var ds = state.depts[name];
+  if (!ds) return;
+  var existing = ds.attachments || [];
+  var errEl = document.getElementById('att-err-' + slug(name));
+  var errors = [];
+  var seen = {};
+  var additions = [];
+
+  Array.prototype.forEach.call(fileList, function (f) {
+    var rawName = String(f.name || '').replace(/\\/g, '/').split('/').pop();
+    var key = rawName + '|' + f.size + '|' + f.lastModified;
+    if (seen[key]) return; // duplicate within this selection
+    seen[key] = true;
+    if (existing.some(function (e) { return e.name === rawName && e.size === f.size; })) return; // already in state
+    if (f.size > MAX_ATTACHMENT_BYTES) {
+      errors.push('File "' + rawName + '" is too large to upload (' + formatBytes(f.size) + '). Maximum is ' + formatBytes(MAX_ATTACHMENT_BYTES) + '.');
+      return;
+    }
+    if (f.size === 0) {
+      errors.push('File "' + rawName + '" is empty (0 bytes) and will not be uploaded.');
+      return;
+    }
+    additions.push({ name: rawName, size: f.size, type: f.type || 'application/octet-stream', file: f });
+  });
+
+  if (errEl) {
+    errEl.style.display = errors.length ? 'block' : 'none';
+    errEl.textContent = errors.join('\n');
+  }
+  if (errors.length) return;
+
+  ds.attachments = existing.concat(additions);
+  renderDepartmentCards();
+}
+
+function removeAttachment(name, idx) {
+  var ds = state.depts[name];
+  if (!ds || !Array.isArray(ds.attachments)) return;
+  ds.attachments.splice(idx, 1);
+  renderDepartmentCards();
+}
+
+function formatBytes(bytes) {
+  if (bytes == null || isNaN(bytes) || bytes < 0) return '0 B';
+  if (bytes === 0) return '0 B';
+  var k = 1024;
+  var sizes = ['B', 'KB', 'MB', 'GB'];
+  var i = Math.floor(Math.log(bytes) / Math.log(k));
+  i = Math.min(i, sizes.length - 1);
+  return (bytes / Math.pow(k, i)).toFixed(i > 0 ? 1 : 0) + ' ' + sizes[i];
+}
+
+function getFileIcon(ext) {
+  var map = {
+    pdf: '📕', doc: '📘', docx: '📘', xls: '📗', xlsx: '📗', ppt: '📙', pptx: '📙',
+    png: '🖼', jpg: '🖼', jpeg: '🖼', gif: '🖼', svg: '🖼', bmp: '🖼',
+    zip: '🗜', rar: '🗜', '7z': '🗜', tar: '🗜', gz: '🗜',
+    txt: '📝', csv: '📝', json: '📝', xml: '📝',
+    mp4: '🎬', mov: '🎬', avi: '🎬', mpg: '🎬', mpeg: '🎬',
+    mp3: '🎵', wav: '🎵'
+  };
+  return map[ext] || '📎';
+}
+
 // =====================================================================
 // STEP NAVIGATION + VALIDATION
 // =====================================================================
@@ -1050,6 +1180,7 @@ function renderReview() {
       html += '<div style="color:#3b82f6;font-weight:600;">' + (lastD ? '└── ' : '├── ') + escapeHtml(deptLabel(name)) + '</div>';
       var ds = state.depts[name];
       var kind = META.departmentConfig[name].kind;
+      var atts = (ds.attachments || []).map(function (a) { return a.name + ' <span style="color:#64748b;">(' + formatBytes(a.size) + ')</span>'; });
         if (kind === 'vapt') {
           var sowCols = getSowColumns(name);
           var sowRows = ds.vapt.sow || [];
@@ -1099,6 +1230,13 @@ function renderReview() {
             }
           });
         }
+      }
+      if (atts.length) {
+        html += '<div>' + dPipe + '└── <span style="color:#475569;">Attachments</span></div>';
+        atts.forEach(function (aTxt, ai) {
+          var lastA = ai === atts.length - 1;
+          html += '<div>' + dPipe + '    ' + (lastA ? '└── ' : '├── ') + '📎 ' + aTxt + '</div>';
+        });
       }
     });
   }
@@ -1237,6 +1375,9 @@ function buildPayload() {
         priority: ds.general.priority || '',
         remarks: ds.general.remarks || ''
       };
+      dept.attachments = (ds.attachments || []).map(function (a) {
+        return { name: a.name, size: a.size, type: a.type };
+      });
       return dept;
   });
   return { client: client, bdPerson: personToJson(BD_PERSON), departments: departments };
@@ -1274,6 +1415,31 @@ function generateJson() {
 // successfully-initiated client cannot be re-initiated by repeated clicks.
 var initiationInFlight = false;
 
+function hasAnyAttachments() {
+  var names = orderedSelectedDepartments();
+  for (var i = 0; i < names.length; i += 1) {
+    var ds = state.depts[names[i]];
+    if (ds && ds.attachments && ds.attachments.length) return true;
+  }
+  return false;
+}
+
+function buildInitiateFormData(payload) {
+  var fd = new FormData();
+  fd.append('payload', JSON.stringify(payload));
+  var names = orderedSelectedDepartments();
+  names.forEach(function (name) {
+    var ds = state.depts[name];
+    if (!ds || !ds.attachments || !ds.attachments.length) return;
+    ds.attachments.forEach(function (a, idx) {
+      if (a.file) {
+        fd.append('files[' + name + '][' + idx + ']', a.file, a.name);
+      }
+    });
+  });
+  return fd;
+}
+
 // Re-enable the Initiate button (used only when switching client / reset).
 function resetInitiateButton() {
   initiationInFlight = false;
@@ -1282,22 +1448,31 @@ function resetInitiateButton() {
 }
 
 // Post the generated payload to /api/initiate, which creates one Main
-// Tracker item per department. Falls back to showing the JSON on failure.
+// Tracker item per department. When attachments are present the request is
+// sent as multipart/form-data so actual file bytes reach the backend;
+// otherwise the existing JSON transport is preserved.
 async function initiateProject() {
   if (initiationInFlight) return;
   var payload = buildPayload();
   var btn = document.getElementById('initiateBtn');
   initiationInFlight = true;
-  if (btn) { btn.disabled = true; btn.textContent = 'Initiating…'; }
+  if (btn) { btn.disabled = true; btn.textContent = hasAnyAttachments() ? 'Initiating & uploading attachments…' : 'Initiating…'; }
   var elOut = document.getElementById('json-output');
+  var useFormData = hasAnyAttachments();
+  var res, data;
   try {
-    var res = await fetch(getApiBase() + '/api/initiate', {
+    var fetchOpts = {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'omit',
-      body: JSON.stringify({ payload: payload })
-    });
-    var data = await res.json();
+      credentials: 'omit'
+    };
+    if (useFormData) {
+      fetchOpts.body = buildInitiateFormData(payload);
+    } else {
+      fetchOpts.headers = { 'Content-Type': 'application/json' };
+      fetchOpts.body = JSON.stringify({ payload: payload });
+    }
+    res = await fetch(getApiBase() + '/api/initiate', fetchOpts);
+    data = await res.json();
     var warningsHtml = '';
     if (data.warnings && data.warnings.length) {
       warningsHtml = '<div class="json-actions" style="color:#f59e0b;font-weight:700;">⚠ Warnings (item saved, some fields skipped):</div>' +
@@ -1318,18 +1493,12 @@ async function initiateProject() {
       syncDepartmentAvailability();
       renderDepartmentCards();
     }
-    // Once every available department is initiated, leave the button disabled
-    // (marked "Fully Initiated") so the client cannot be re-initiated here.
     if (state.selectedClient && getInitiatedDepartmentsForClient(state.selectedClient).length >= getAvailableDepartments().length) {
       if (btn) { btn.disabled = true; btn.textContent = '✓ Fully Initiated'; }
     } else {
-      // Partial success / skipped: stay disabled with a hint that you can
-      // re-initiate remaining departments. The guard keeps a double-click from
-      // firing a second request until the user interacts (resets / switches).
       if (btn) { btn.disabled = true; btn.textContent = '✓ Initiated — switch client or Reset to initiate more'; }
     }
   } catch (err) {
-    // Network/request failure: re-enable so the user can retry once.
     if (btn) { btn.disabled = false; btn.textContent = '🚀 Initiate'; }
     initiationInFlight = false;
     elOut.innerHTML = '<div class="json-actions" style="color:#ef4444;font-weight:700;">⚠ Could not reach server — showing JSON payload</div>' +

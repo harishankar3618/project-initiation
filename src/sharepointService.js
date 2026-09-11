@@ -1,5 +1,5 @@
 const { SITE_URL, LIST_NAMES, CLIENT_FIELD_CANDIDATES, PROJECT_FIELD_CANDIDATES, MAIN_TRACKER_FIELDS, MAIN_TRACKER_FIELDS_FALLBACK, DEFAULT_STATUS, CLIENT_INITIATION_STATUS } = require('./config');
-const { graphGet, graphGetAll, graphPost, graphPatch, mapGraphUser } = require('./graphClient');
+const { graphGet, graphGetAll, graphPost, graphPatch, mapGraphUser, uploadAttachmentToSharePointItem } = require('./graphClient');
 const metadata = require('./metadata');
 
 function normalizeText(value) {
@@ -495,7 +495,8 @@ async function refreshClientProgress(ctx, listId, client) {
   }
 }
 
-async function initiateProject(payload) {
+async function initiateProject(payload, attachments) {
+  attachments = attachments || {};
   const ctx = await getSiteContext();
   const listId = ctx.lists.intake && ctx.lists.intake.id;
   if (!listId) throw new Error('Main Tracker (intake) list could not be resolved.');
@@ -525,22 +526,49 @@ async function initiateProject(payload) {
       }
 
       let attemptedFields = null;
+      let createdItem = null;
+      let attachmentResult = { uploaded: [], failed: [] };
       try {
         const built = await buildMainTrackerItem(payload, dept, columns.columns, columns.choiceColumns, ctx.site.id);
         attemptedFields = built.fields;
         built.warnings.forEach(function (w) { result.warnings.push({ department: dept.department, message: w }); });
         result.sent.push({ department: dept.department, fields: attemptedFields });
-        const item = await graphPost(
+        createdItem = await graphPost(
           '/sites/' + ctx.site.id + '/lists/' + listId + '/items',
           { fields: attemptedFields }
         );
-        result.created.push(item);
+        result.created.push(createdItem);
+
+        const deptAttachments = Array.isArray(attachments[deptName]) ? attachments[deptName] : [];
+        if (deptAttachments.length) {
+          console.log('[Initiate] Department', deptName, 'item created:', createdItem.id, '- uploading', deptAttachments.length, 'attachment(s)');
+          for (let a = 0; a < deptAttachments.length; a += 1) {
+            const file = deptAttachments[a];
+            try {
+              const uploaded = await uploadAttachmentToSharePointItem(ctx.site.id, listId, createdItem.id, file);
+              attachmentResult.uploaded.push(uploaded);
+              console.log('[Attachment] Upload succeeded:', deptName, '/', uploaded.name);
+            } catch (attErr) {
+              const failedEntry = { name: String(file.name || 'file-' + a), message: attErr && attErr.message ? attErr.message : 'Unknown upload error' };
+              attachmentResult.failed.push(failedEntry);
+              const warnMsg = 'Main Tracker item saved, but attachment "' + failedEntry.name + '" could not be uploaded: ' + failedEntry.message;
+              result.warnings.push({ department: dept.department, message: warnMsg });
+              console.warn('[Attachment] Upload failed:', deptName, '/', failedEntry.name, '-', failedEntry.message);
+            }
+          }
+        }
       } catch (error) {
         result.errors.push({
           department: dept.department,
           fields: attemptedFields,
-          message: error && error.message ? error.message : 'Unknown error'
+          message: error && error.message ? error.message : 'Unknown error',
+          createdItem: createdItem || null,
+          attachments: attachmentResult
         });
+      }
+
+      if (createdItem && (attachmentResult.uploaded.length || attachmentResult.failed.length)) {
+        createdItem.attachments = attachmentResult;
       }
     }
 

@@ -4,6 +4,7 @@ const GRAPH_BASE = 'https://graph.microsoft.com/v1.0';
 const GRAPH_RETRIES = 3;
 const GRAPH_RETRY_DELAY_BASE = 1000;
 const GRAPH_TIMEOUT = 60000;
+const ATTACHMENT_MAX_BYTES = 50 * 1024 * 1024;
 
 async function sleep(ms) {
   return new Promise(function (resolve) { setTimeout(resolve, ms); });
@@ -144,6 +145,85 @@ async function graphGetAll(relativeUrl) {
   return items;
 }
 
+async function createAttachmentUploadSession(siteId, listId, itemId, fileName, fileSize, contentType) {
+  if (fileSize > ATTACHMENT_MAX_BYTES) {
+    throw new Error('File "' + fileName + '" exceeds the maximum allowed size of ' + (ATTACHMENT_MAX_BYTES / 1024 / 1024) + ' MB.');
+  }
+
+  const sessionBody = {
+    item: {
+      attachmentType: 'file',
+      name: fileName
+    }
+  };
+
+  const payload = await graphPost(
+    '/sites/' + siteId + '/lists/' + listId + '/items/' + itemId + '/attachments/createUploadSession',
+    sessionBody
+  );
+
+  if (!payload || !payload.uploadUrl) {
+    throw new Error('Graph did not return an upload URL for attachment: ' + fileName);
+  }
+
+  return payload.uploadUrl;
+}
+
+async function streamBytesToUploadUrl(uploadUrl, buffer, fileName, contentType) {
+  const headers = {
+    'Content-Type': contentType || 'application/octet-stream',
+    'Content-Length': String(Buffer.isBuffer(buffer) ? buffer.length : buffer.byteLength)
+  };
+
+  const controller = new AbortController();
+  const timeout = setTimeout(function () { controller.abort(); }, GRAPH_TIMEOUT);
+  let response;
+  try {
+    response = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: headers,
+      body: buffer,
+      signal: controller.signal
+    });
+  } catch (error) {
+    clearTimeout(timeout);
+    if (error.name === 'AbortError') {
+      throw new Error('Attachment upload for "' + fileName + '" timed out after ' + GRAPH_TIMEOUT + 'ms.');
+    }
+    throw error;
+  }
+  clearTimeout(timeout);
+
+  if (!response.ok) {
+    const text = await response.text();
+    const msg = text || ('HTTP ' + response.status);
+    throw new Error('Graph attachment upload failed for "' + fileName + '": ' + msg);
+  }
+}
+
+async function uploadAttachmentToSharePointItem(siteId, listId, itemId, file) {
+  const fileName = String(file.name || '').replace(/\\/g, '/').split('/').pop() || 'unnamed';
+  const fileSize = Number(file.size || 0);
+  const contentType = String(file.type || 'application/octet-stream');
+
+  if (!fileSize) {
+    throw new Error('File "' + fileName + '" is empty (0 bytes).');
+  }
+
+  let buffer;
+  if (typeof Buffer !== 'undefined' && Buffer.isBuffer(file.buffer)) {
+    buffer = file.buffer;
+  } else if (file.arrayBuffer) {
+    buffer = Buffer.from(await file.arrayBuffer());
+  } else {
+    throw new Error('Unsupported file object for attachment upload: ' + fileName);
+  }
+
+  const uploadUrl = await createAttachmentUploadSession(siteId, listId, itemId, fileName, fileSize, contentType);
+  await streamBytesToUploadUrl(uploadUrl, buffer, fileName, contentType);
+  return { name: fileName, size: fileSize, type: contentType };
+}
+
 function graphDelete(relativeUrl, extraHeaders) {
   return graphWrite('DELETE', relativeUrl, undefined, extraHeaders);
 }
@@ -157,5 +237,9 @@ module.exports = {
   graphSearchUsers,
   graphGetUserById,
   mapGraphUser,
-  toPerson
+  toPerson,
+  createAttachmentUploadSession,
+  streamBytesToUploadUrl,
+  uploadAttachmentToSharePointItem,
+  ATTACHMENT_MAX_BYTES
 };
