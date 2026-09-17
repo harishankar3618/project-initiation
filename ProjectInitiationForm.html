@@ -589,7 +589,17 @@ function renderVapt(name) {
   var ds = state.depts[name];
   if (!ds.vapt.sow || !ds.vapt.sow.length) ds.vapt.sow = [createEmptySowRow()];
   var wrap = el('div');
-  wrap.appendChild(renderSelectField('Project Type', META.vaptProjectTypes, ds.vapt.projectType, function (v) { ds.vapt.projectType = v; }));
+  var projectType = el('div', { class: 'scope-field', style: 'margin-bottom:0.75rem;' });
+  projectType.appendChild(el('label', {}, ['Project Type']));
+  projectType.appendChild(el('input', {
+    type: 'text',
+    class: 'scope-input--text',
+    value: ds.vapt.projectType || '',
+    placeholder: 'Enter project type',
+    style: 'max-width:360px;',
+    oninput: function (e) { ds.vapt.projectType = e.target.value; }
+  }));
+  wrap.appendChild(projectType);
   wrap.appendChild(renderSowTable(getSowColumns(name), ds.vapt.sow));
   return wrap;
 }
