@@ -81,19 +81,16 @@ var SOC_PROJECT_TYPES = [
   {
     name: 'SECEON',
     scope: [
-      F('Critical Devices', 'criticalDevices', 'number', null, { default: 10 }),
     ]
   },
   {
     name: 'Securonix',
     scope: [
-      F('Critical Devices', 'criticalDevices', 'number'),
     ]
   },
   {
     name: 'Gurucul',
     scope: [
-      F('Critical Devices', 'criticalDevices', 'number'),
     ]
   },
   {
